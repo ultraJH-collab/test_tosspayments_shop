@@ -5,7 +5,7 @@
 // test_ 로 시작하는 키만 허용합니다(라이브 키 사용 방지).
 const TOSS_CLIENT_KEY = "test_gck_docs_Ovk5rk1EwkEbP0W43n07xlzm";
 
-document.addEventListener("DOMContentLoaded", async () => {
+onReady(async () => {
   const root = document.getElementById("checkout-root");
   const isBuyNow = qs("mode") === "buynow";
   const items = isBuyNow ? storeGet(sessionStorage, "fr_buynow", []).filter((i) => findProduct(i.id)) : Cart.items();
@@ -16,8 +16,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   const o = calcOrder(items);
-  const first = o.lines[0].product;
-  const orderName = o.lines.length > 1 ? `${first.name} 외 ${o.lines.length - 1}건` : first.name;
 
   root.innerHTML = `
     <div class="order-layout">
@@ -30,14 +28,16 @@ document.addEventListener("DOMContentLoaded", async () => {
               <div>
                 <p class="li-brand">${escapeHtml(l.product.brand)}</p>
                 <p class="li-name">${escapeHtml(l.product.name)}</p>
-                <p class="li-opt">옵션: ${l.size} / 수량: ${l.qty}개</p>
+                <p class="li-opt">옵션: ${escapeHtml(l.size)} / 수량: ${l.qty}개</p>
               </div>
               <div class="li-price">${l.lineOrigin !== l.lineTotal ? `<del>${won(l.lineOrigin)}</del>` : ""}<b>${won(l.lineTotal)}</b></div>
             </div>`).join("")}
         </section>
 
         <section class="box" style="margin-top:40px">
-          <div class="box-title">주문자 / 배송 정보</div>
+          <div class="box-title">주문자 / 배송 정보
+            ${Auth.user ? "" : `<a class="guest-login" href="${loginUrl()}">로그인하고 주문내역 저장하기 ›</a>`}
+          </div>
           <div class="form-grid">
             <label for="c-name">받는 분</label><input id="c-name" placeholder="이름" autocomplete="name" />
             <label for="c-phone">휴대폰</label><input id="c-phone" placeholder="숫자만 입력 (예: 01012345678)" inputmode="numeric" autocomplete="tel" />
@@ -78,6 +78,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   const errEl = document.getElementById("pay-error");
   const showError = (msg) => (errEl.textContent = msg);
 
+  // 로그인 회원은 회원 정보로 미리 채운다.
+  if (Auth.user) {
+    document.getElementById("c-name").value = (Auth.profile && Auth.profile.name) || "";
+    document.getElementById("c-phone").value = (Auth.profile && Auth.profile.phone) || "";
+    document.getElementById("c-email").value = Auth.user.email || "";
+  }
+
   document.getElementById("btn-zip").onclick = () => {
     document.getElementById("c-zip").value = "06236";
     document.getElementById("c-addr1").value = "서울특별시 강남구 테헤란로 000 (예시 주소)";
@@ -97,11 +104,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     payBtn.textContent = "결제 불가";
     return showError("테스트 키(test_...)만 사용할 수 있습니다.");
   }
+  if (!App.online) {
+    payBtn.textContent = "결제 불가";
+    return showError("주문 서버(Supabase)에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.");
+  }
 
   let widgets;
   try {
     const tossPayments = TossPayments(TOSS_CLIENT_KEY);
-    widgets = tossPayments.widgets({ customerKey: TossPayments.ANONYMOUS });
+    // 회원은 회원 ID를 customerKey로 써서 토스 쪽에서도 구매자를 구분한다.
+    widgets = tossPayments.widgets({ customerKey: Auth.user ? Auth.user.id : TossPayments.ANONYMOUS });
     await widgets.setAmount({ currency: "KRW", value: o.total });
 
     const [, agreement] = await Promise.all([
@@ -129,14 +141,37 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!name) return showError("받는 분 이름을 입력해 주세요.");
     if (phone && !/^01\d{8,9}$/.test(phone)) return showError("휴대폰 번호를 확인해 주세요.");
 
-    // 주문번호: 영문/숫자/-/_ 6~64자
-    const orderId = "FR" + Date.now() + Math.random().toString(36).slice(2, 8).toUpperCase();
+    const memo = document.getElementById("c-memo");
+    payBtn.disabled = true;
+
+    // DB에 결제대기 주문을 만든다. 주문번호와 결제 금액은 DB가 상품가로 다시 계산해 돌려준다.
+    const { data: order, error } = await sb.rpc("create_order", {
+      p_items: items,
+      p_customer: {
+        name,
+        phone,
+        email,
+        zip: document.getElementById("c-zip").value,
+        addr1: document.getElementById("c-addr1").value,
+        addr2: document.getElementById("c-addr2").value.trim(),
+        memo: memo.selectedIndex > 0 ? memo.value : "",
+      },
+    });
+    if (error) {
+      payBtn.disabled = false;
+      return showError(error.message || "주문을 생성하지 못했습니다.");
+    }
+    if (order.amount !== o.total) {
+      payBtn.disabled = false;
+      return showError("상품 가격이 변경되었습니다. 페이지를 새로고침한 뒤 다시 결제해 주세요.");
+    }
+    const orderId = order.order_id;
 
     // 결제 성공 후 금액 위변조 확인용으로 주문 정보를 보관합니다.
     storeSet(sessionStorage, "fr_pending_order", {
       orderId,
-      orderName,
-      amount: o.total,
+      orderName: order.order_name,
+      amount: order.amount,
       mode: isBuyNow ? "buynow" : "cart",
       items,
     });
@@ -144,7 +179,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     try {
       await widgets.requestPayment({
         orderId,
-        orderName,
+        orderName: order.order_name,
         successUrl: location.origin + location.pathname.replace(/checkout\.html$/, "success.html"),
         failUrl: location.origin + location.pathname.replace(/checkout\.html$/, "fail.html"),
         customerName: name,
@@ -152,7 +187,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         customerMobilePhone: phone || undefined,
       });
     } catch (err) {
-      // 사용자가 결제창을 닫은 경우 등
+      // 사용자가 결제창을 닫은 경우 등. 결제대기 주문은 실패로 남긴다.
+      sb.rpc("mark_order_failed", { p_order_id: orderId }).then(() => {});
+      payBtn.disabled = false;
       showError(err.message || "결제가 취소되었습니다.");
     }
   });

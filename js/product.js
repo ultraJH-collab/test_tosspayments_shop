@@ -1,6 +1,10 @@
 /* 상품 상세 */
-document.addEventListener("DOMContentLoaded", () => {
-  const p = findProduct(qs("id")) || PRODUCTS[0];
+onReady(() => {
+  const p = findProduct(qs("id"));
+  if (!p) {
+    document.getElementById("pd-root").innerHTML = `<div class="empty"><p>판매 중이 아니거나 존재하지 않는 상품입니다.</p><a class="btn btn-black" href="index.html">홈으로</a></div>`;
+    return;
+  }
   const cat = CATEGORIES[p.cat];
   document.body.dataset.page = p.cat;
   renderHeader(p.cat);
@@ -37,7 +41,7 @@ document.addEventListener("DOMContentLoaded", () => {
   renderGallery();
 
   /* 사이즈 */
-  $("sizes").innerHTML = p.sizes.map((s) => `<button type="button" class="size-btn" data-size="${s}">${s}</button>`).join("");
+  $("sizes").innerHTML = p.sizes.map((s) => `<button type="button" class="size-btn" data-size="${escapeHtml(s)}">${escapeHtml(s)}</button>`).join("");
   $("sizes").addEventListener("click", (e) => {
     const b = e.target.closest(".size-btn");
     if (!b) return;
@@ -91,7 +95,7 @@ document.addEventListener("DOMContentLoaded", () => {
     p.sizes
       .map((s, i) => {
         const vals = p.cat === "shoes" ? [Number(s) / 10 + 0.5, "보통"] : p.cat === "pants" ? [100 + i * 2, 36 + i * 2, 32 + i * 1.5, 22 + i] : [68 + i * 2, 50 + i * 2, 56 + i * 3, 22 + i];
-        return `<tr><td><b>${s}</b></td>${vals.map((v) => `<td>${v}</td>`).join("")}</tr>`;
+        return `<tr><td><b>${escapeHtml(s)}</b></td>${vals.map((v) => `<td>${v}</td>`).join("")}</tr>`;
       })
       .join("") +
     `</tbody>`;
@@ -104,7 +108,7 @@ document.addEventListener("DOMContentLoaded", () => {
   ];
   $("review-count").textContent = num(p.reviews);
   $("reviews").innerHTML = reviews
-    .map((v) => `<div class="review"><div class="r-top"><span class="star">${"★".repeat(v.r)}${"☆".repeat(5 - v.r)}</span><span>${v.who}</span><span>구매옵션: ${v.size}</span></div><p>${v.text}</p></div>`)
+    .map((v) => `<div class="review"><div class="r-top"><span class="star">${"★".repeat(v.r)}${"☆".repeat(5 - v.r)}</span><span>${v.who}</span><span>구매옵션: ${escapeHtml(v.size)}</span></div><p>${v.text}</p></div>`)
     .join("");
 
   /* 추천 */

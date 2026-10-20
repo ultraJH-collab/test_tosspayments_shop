@@ -1,5 +1,5 @@
 /* 카테고리 상품 리스트 (tops.html / pants.html / shoes.html 공용) */
-document.addEventListener("DOMContentLoaded", () => {
+onReady(() => {
   const cat = document.body.dataset.page;
   const info = CATEGORIES[cat];
   const all = PRODUCTS.filter((p) => p.cat === cat);

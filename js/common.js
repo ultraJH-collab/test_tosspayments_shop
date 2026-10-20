@@ -1,4 +1,5 @@
-/* 공통: 헤더/푸터, 포맷, 장바구니, 상품 이미지/카드 */
+/* 공통: 헤더/푸터, 포맷, 장바구니, 상품 이미지/카드 (js/db.js 다음에 로드) */
+// 배송비 규칙은 DB 함수 create_order와 같아야 한다(실제 결제 금액은 DB가 계산).
 const SHIPPING_FREE_OVER = 50000;
 const SHIPPING_FEE = 3000;
 
@@ -73,13 +74,14 @@ const SHAPES = {
 };
 
 function productImage(p, variant = 0) {
-  const bgs = [p.tone, "#f4f4f4", "#e9e9e9", "#ffffff"];
+  const hex = (c, d) => (/^#[0-9a-f]{6}$/i.test(c) ? c : d);
+  const bgs = [hex(p.tone, "#f2f2f2"), "#f4f4f4", "#e9e9e9", "#ffffff"];
   const scale = [1, 1.25, 0.85, 1][variant % 4];
   const t = `translate(200 250) scale(${scale}) translate(-200 -250)`;
   return (
     `<svg viewBox="0 0 400 500" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${escapeHtml(p.name)}">` +
     `<rect width="400" height="500" fill="${bgs[variant % 4]}"/>` +
-    `<g transform="${t}" fill="${p.color}" stroke="rgba(0,0,0,.12)" stroke-width="2">${SHAPES[p.cat]}</g>` +
+    `<g transform="${t}" fill="${hex(p.color, "#888888")}" stroke="rgba(0,0,0,.12)" stroke-width="2">${SHAPES[p.cat]}</g>` +
     `</svg>`
   );
 }
@@ -133,8 +135,13 @@ function renderHeader(active) {
           </button>
         </form>
         <div class="top-actions">
-          <a href="#" class="ta">로그인</a>
-          <a href="#" class="ta">마이</a>
+          ${
+            Auth.user
+              ? (Auth.isAdmin ? `<a href="admin.html" class="ta ta-admin">관리자</a>` : "") +
+                `<a href="mypage.html" class="ta">${escapeHtml(Auth.displayName())}님</a>` +
+                `<button type="button" class="ta" id="btn-logout">로그아웃</button>`
+              : `<a href="${loginUrl()}" class="ta">로그인</a><a href="login.html?tab=signup" class="ta">회원가입</a>`
+          }
           <a href="cart.html" class="ta cart-link">장바구니<span class="cart-badge" id="cart-badge">0</span></a>
         </div>
       </div>
@@ -145,6 +152,8 @@ function renderHeader(active) {
         <span class="gnb-sub">랭킹</span><span class="gnb-sub">세일</span><span class="gnb-sub">브랜드</span>
       </div>
     </nav>`;
+  const logout = document.getElementById("btn-logout");
+  if (logout) logout.onclick = signOut;
   updateCartBadge();
 }
 
@@ -187,3 +196,5 @@ document.addEventListener("DOMContentLoaded", () => {
   renderHeader(document.body.dataset.page || "");
   renderFooter();
 });
+// 세션/상품 로드 후 로그인 상태와 장바구니 수량을 반영해 다시 그린다.
+onReady(() => renderHeader(document.body.dataset.page || ""));

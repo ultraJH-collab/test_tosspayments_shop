@@ -1,11 +1,14 @@
-/* 상품 데이터 (퍼블리싱용 더미 데이터) */
+/* 카테고리 + 상품 데이터
+   상품은 Supabase products 테이블에서 불러와 PRODUCTS에 채운다(js/db.js).
+   SEED_PRODUCTS는 DB 초기 데이터(supabase/migrations/002_seed_products.sql)와 같고,
+   Supabase에 연결하지 못했을 때 화면을 보여주기 위한 대체 데이터로만 쓴다. */
 const CATEGORIES = {
   tops: { name: "상의", en: "TOPS", page: "tops.html" },
   pants: { name: "바지", en: "PANTS", page: "pants.html" },
   shoes: { name: "신발", en: "SHOES", page: "shoes.html" },
 };
 
-const PRODUCTS = [
+const SEED_PRODUCTS = [
   // 상의
   { id: "t01", cat: "tops", brand: "LOWFIELD", name: "오버핏 헤비웨이트 반팔 티셔츠", price: 39000, sale: 29000, color: "#1a1a1a", tone: "#f2f2f2", sizes: ["S", "M", "L", "XL"], rating: 4.8, reviews: 2381, likes: 15400, tag: "BEST" },
   { id: "t02", cat: "tops", brand: "NORDHAUS", name: "릴렉스드 옥스포드 셔츠 스카이블루", price: 59000, sale: 47200, color: "#8fb3d9", tone: "#eef3f8", sizes: ["S", "M", "L", "XL"], rating: 4.7, reviews: 912, likes: 6210 },
@@ -36,6 +39,8 @@ const PRODUCTS = [
   { id: "s07", cat: "shoes", brand: "CANVAS CO.", name: "슬립온 스니커즈 체커보드", price: 59000, sale: 41300, color: "#3b3b3b", tone: "#f2f2f2", sizes: ["230", "240", "250", "260", "270"], rating: 4.5, reviews: 1210, likes: 8800 },
   { id: "s08", cat: "shoes", brand: "OAKROW", name: "페니 로퍼 버건디", price: 169000, sale: 135200, color: "#6a1f2b", tone: "#f5eced", sizes: ["250", "260", "270", "280"], rating: 4.6, reviews: 211, likes: 2600 },
 ];
+
+const PRODUCTS = [];
 
 function findProduct(id) {
   return PRODUCTS.find((p) => p.id === id);

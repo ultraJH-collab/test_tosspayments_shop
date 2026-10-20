@@ -26,15 +26,19 @@
   <footer id="site-footer"></footer>
 
   <script src="js/data.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+  <script src="js/db.js"></script>
   <script src="js/common.js"></script>
   <script>
-    document.addEventListener("DOMContentLoaded", () => {
+    onReady(() => {
       const heroes = [
         { id: "t03", small: "COVERSTUDIO 단독", title: "가을 아우터<br>최대 30% 할인" },
         { id: "p01", small: "DENIMLAB 신상", title: "와이드 데님<br>컬렉션" },
         { id: "s01", small: "STRIDE 랭킹 1위", title: "매일 신는<br>화이트 스니커즈" },
       ];
+      // 관리자가 히어로 상품을 숨기거나 지우면 해당 슬라이드는 건너뛴다.
       document.getElementById("hero").innerHTML = heroes
+        .filter((h) => findProduct(h.id))
         .map((h) => {
           const p = findProduct(h.id);
           return `<a class="hero-slide" href="product.html?id=${p.id}">${productImage(p, 1)}

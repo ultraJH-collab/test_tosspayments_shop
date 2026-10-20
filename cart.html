@@ -19,6 +19,8 @@
   <footer id="site-footer"></footer>
 
   <script src="js/data.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+  <script src="js/db.js"></script>
   <script src="js/common.js"></script>
   <script>
     function renderCart() {
@@ -39,7 +41,7 @@
                 <div>
                   <p class="li-brand">${escapeHtml(l.product.brand)}</p>
                   <a class="li-name" href="product.html?id=${l.product.id}">${escapeHtml(l.product.name)}</a>
-                  <p class="li-opt">옵션: ${l.size}</p>
+                  <p class="li-opt">옵션: ${escapeHtml(l.size)}</p>
                   <div class="li-ctrl">
                     <div class="qty">
                       <button type="button" data-act="minus" data-idx="${idx}" aria-label="수량 감소">−</button>
@@ -80,7 +82,7 @@
       renderCart();
     });
 
-    document.addEventListener("DOMContentLoaded", renderCart);
+    onReady(renderCart);
   </script>
 </body>
 </html>

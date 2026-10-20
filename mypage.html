@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>마이페이지 | FITROOM</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body data-page="mypage">
+  <header id="site-header"></header>
+
+  <main class="inner">
+    <h1 class="page-title">마이페이지</h1>
+    <div class="my-layout">
+      <section class="box">
+        <div class="box-title">회원 정보</div>
+        <form class="form-grid" id="profile-form">
+          <label>이메일</label><input id="m-email" disabled />
+          <label for="m-name">이름</label><input id="m-name" autocomplete="name" />
+          <label for="m-phone">휴대폰</label><input id="m-phone" inputmode="numeric" autocomplete="tel" placeholder="숫자만 입력" />
+          <label>가입일</label><input id="m-joined" disabled />
+          <span></span><button type="submit" class="btn btn-black btn-sm">정보 저장</button>
+        </form>
+      </section>
+
+      <section class="box">
+        <div class="box-title">주문 내역 <span class="muted" id="order-count"></span></div>
+        <div id="orders"></div>
+      </section>
+    </div>
+  </main>
+
+  <footer id="site-footer"></footer>
+
+  <script src="js/data.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+  <script src="js/db.js"></script>
+  <script src="js/common.js"></script>
+  <script>
+    onReady(async () => {
+      if (!Auth.user) return location.replace(loginUrl());
+      const $ = (id) => document.getElementById(id);
+      const p = Auth.profile || {};
+
+      $("m-email").value = Auth.user.email;
+      $("m-name").value = p.name || "";
+      $("m-phone").value = p.phone || "";
+      $("m-joined").value = new Date(Auth.user.created_at).toLocaleDateString("ko-KR");
+
+      $("profile-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const name = $("m-name").value.trim();
+        const phone = $("m-phone").value.replace(/\D/g, "");
+        if (!name) return toast("이름을 입력해 주세요.");
+        if (phone && !/^01\d{8,9}$/.test(phone)) return toast("휴대폰 번호를 확인해 주세요.");
+        const { data, error } = await sb.from("profiles").update({ name, phone }).eq("id", Auth.user.id).select().single();
+        if (error) return toast(error.message);
+        Auth.profile = data;
+        renderHeader("mypage");
+        toast("회원 정보를 저장했어요.");
+      });
+
+      const { data: orders, error } = await sb
+        .from("orders")
+        .select("*, order_items(*)")
+        .eq("user_id", Auth.user.id)
+        .order("created_at", { ascending: false });
+      if (error) return ($("orders").innerHTML = `<p class="empty">${escapeHtml(error.message)}</p>`);
+
+      $("order-count").textContent = `${orders.length}건`;
+      $("orders").innerHTML = orders.length
+        ? orders.map((o) => `
+          <div class="order-card">
+            <div class="oc-head">
+              <span>${new Date(o.created_at).toLocaleString("ko-KR")}</span>
+              <span class="oc-id">${escapeHtml(o.id)}</span>
+              <span class="status status-${o.status}">${ORDER_STATUS[o.status]}</span>
+            </div>
+            ${o.order_items.map((i) => {
+              const prod = findProduct(i.product_id);
+              return `
+              <div class="line-item">
+                ${prod ? `<a class="li-img" href="product.html?id=${prod.id}">${productImage(prod)}</a>` : `<div class="li-img"></div>`}
+                <div>
+                  <p class="li-brand">${escapeHtml(i.brand)}</p>
+                  <p class="li-name">${escapeHtml(i.product_name)}</p>
+                  <p class="li-opt">옵션: ${escapeHtml(i.size)} / 수량: ${i.qty}개</p>
+                </div>
+                <div class="li-price"><b>${won(i.line_total)}</b></div>
+              </div>`;
+            }).join("")}
+            <div class="oc-foot">배송비 ${o.shipping ? won(o.shipping) : "무료"} · 결제금액 <b>${won(o.amount)}</b></div>
+          </div>`).join("")
+        : `<div class="empty"><p>주문 내역이 없습니다.</p><a class="btn btn-black" href="index.html">쇼핑하러 가기</a></div>`;
+    });
+  </script>
+</body>
+</html>

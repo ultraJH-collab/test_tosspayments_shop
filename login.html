@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>로그인 | FITROOM</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body data-page="login">
+  <header id="site-header"></header>
+
+  <main class="inner">
+    <div class="auth">
+      <div class="auth-tabs" id="auth-tabs">
+        <button type="button" data-tab="login" class="on">로그인</button>
+        <button type="button" data-tab="signup">회원가입</button>
+      </div>
+
+      <form class="auth-form" id="form-login" novalidate>
+        <label>이메일<input name="email" type="email" autocomplete="email" required /></label>
+        <label>비밀번호<input name="password" type="password" autocomplete="current-password" required /></label>
+        <p class="pay-error" data-error></p>
+        <button type="submit" class="btn btn-black">로그인</button>
+      </form>
+
+      <form class="auth-form hidden" id="form-signup" novalidate>
+        <label>이메일<input name="email" type="email" autocomplete="email" required /></label>
+        <label><span>비밀번호 <small>(6자 이상)</small></span><input name="password" type="password" autocomplete="new-password" minlength="6" required /></label>
+        <label>비밀번호 확인<input name="password2" type="password" autocomplete="new-password" required /></label>
+        <label>이름<input name="name" autocomplete="name" required /></label>
+        <label><span>휴대폰 <small>(선택)</small></span><input name="phone" inputmode="numeric" autocomplete="tel" placeholder="숫자만 입력" /></label>
+        <p class="pay-error" data-error></p>
+        <button type="submit" class="btn btn-black">회원가입</button>
+      </form>
+
+      <div class="auth-done hidden" id="signup-done">
+        <div class="result-icon">✓</div>
+        <h2>인증 메일을 보냈습니다</h2>
+        <p>메일함에서 인증 링크를 누른 뒤 로그인해 주세요.</p>
+      </div>
+    </div>
+  </main>
+
+  <footer id="site-footer"></footer>
+
+  <script src="js/data.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+  <script src="js/db.js"></script>
+  <script src="js/common.js"></script>
+  <script>
+    onReady(() => {
+      // 다른 사이트로 보내지 않도록 같은 폴더의 .html 경로만 허용한다.
+      const raw = qs("next") || "index.html";
+      const next = /^[a-z0-9_-]+\.html(\?[^#]*)?$/i.test(raw) ? raw : "index.html";
+      if (Auth.user) return location.replace(next);
+
+      const tabs = document.getElementById("auth-tabs");
+      const forms = { login: document.getElementById("form-login"), signup: document.getElementById("form-signup") };
+      function showTab(tab) {
+        tabs.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.tab === tab));
+        Object.entries(forms).forEach(([k, f]) => f.classList.toggle("hidden", k !== tab));
+        document.getElementById("signup-done").classList.add("hidden");
+        document.title = `${tab === "login" ? "로그인" : "회원가입"} | FITROOM`;
+      }
+      tabs.addEventListener("click", (e) => e.target.dataset.tab && showTab(e.target.dataset.tab));
+      showTab(qs("tab") === "signup" ? "signup" : "login");
+
+      const errorOf = (form) => form.querySelector("[data-error]");
+      const busy = (form, on) => (form.querySelector("button[type=submit]").disabled = on);
+      const KO_ERRORS = {
+        "Invalid login credentials": "이메일 또는 비밀번호가 올바르지 않습니다.",
+        "Email not confirmed": "이메일 인증이 완료되지 않았습니다. 메일함을 확인해 주세요.",
+        "User already registered": "이미 가입된 이메일입니다.",
+      };
+      const ko = (err) => KO_ERRORS[err.message] || err.message;
+
+      forms.login.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const f = e.currentTarget;
+        const err = errorOf(f);
+        err.textContent = "";
+        const email = f.email.value.trim();
+        if (!email || !f.password.value) return (err.textContent = "이메일과 비밀번호를 입력해 주세요.");
+        busy(f, true);
+        const { error } = await sb.auth.signInWithPassword({ email, password: f.password.value });
+        if (error) {
+          busy(f, false);
+          return (err.textContent = ko(error));
+        }
+        await loadSession();
+        if (!Auth.user) {
+          busy(f, false);
+          return (err.textContent = "이용이 정지된 계정입니다.");
+        }
+        location.replace(next);
+      });
+
+      forms.signup.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const f = e.currentTarget;
+        const err = errorOf(f);
+        err.textContent = "";
+        const email = f.email.value.trim();
+        const name = f.name.value.trim();
+        const phone = f.phone.value.replace(/\D/g, "");
+        if (!/^\S+@\S+\.\S+$/.test(email)) return (err.textContent = "이메일을 확인해 주세요.");
+        if (f.password.value.length < 6) return (err.textContent = "비밀번호는 6자 이상이어야 합니다.");
+        if (f.password.value !== f.password2.value) return (err.textContent = "비밀번호가 일치하지 않습니다.");
+        if (!name) return (err.textContent = "이름을 입력해 주세요.");
+        if (phone && !/^01\d{8,9}$/.test(phone)) return (err.textContent = "휴대폰 번호를 확인해 주세요.");
+
+        busy(f, true);
+        const { data, error } = await sb.auth.signUp({
+          email,
+          password: f.password.value,
+          options: {
+            data: { name, phone },
+            emailRedirectTo: location.origin + location.pathname,
+          },
+        });
+        busy(f, false);
+        if (error) return (err.textContent = ko(error));
+        if (data.session) {
+          // 이메일 인증을 끈 프로젝트에서는 바로 로그인된다.
+          toast("가입을 환영합니다!");
+          return location.replace(next);
+        }
+        f.classList.add("hidden");
+        document.getElementById("signup-done").classList.remove("hidden");
+      });
+    });
+  </script>
+</body>
+</html>
