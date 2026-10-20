@@ -27,7 +27,8 @@ onReady(() => {
 
   /* 갤러리 */
   function renderGallery() {
-    $("thumbs").innerHTML = [0, 1, 2, 3]
+    const views = p.images && p.images.length ? p.images.map((_, i) => i) : [0, 1, 2, 3];
+    $("thumbs").innerHTML = views
       .map((v) => `<button type="button" class="${v === state.view ? "on" : ""}" data-v="${v}" aria-label="이미지 ${v + 1}">${productImage(p, v)}</button>`)
       .join("");
     $("main-img").innerHTML = productImage(p, state.view);
@@ -88,7 +89,7 @@ onReady(() => {
   };
 
   /* 상세 정보 */
-  $("detail-imgs").innerHTML = [0, 1, 2].map((v) => productImage(p, v)).join("");
+  $("detail-imgs").innerHTML = (p.images && p.images.length ? p.images.map((_, i) => i) : [0, 1, 2]).map((v) => productImage(p, v)).join("");
   $("detail-text").innerHTML =
     `${escapeHtml(p.brand)}의 ${escapeHtml(p.name)}입니다. 데일리로 활용하기 좋은 실루엣과 탄탄한 소재로 제작되었습니다.<br>` +
     `· 소재: ${p.cat === "shoes" ? "천연 가죽 / 러버 아웃솔" : "코튼 100%"}<br>· 제조국: 대한민국<br>· 세탁: 라벨의 세탁 방법을 확인해 주세요.`;

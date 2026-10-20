@@ -39,9 +39,9 @@ powershell -ExecutionPolicy Bypass -File serve.ps1 -Port 9000
 ### Supabase
 - 프로젝트: `fitroom-shop` (ref `fnzrwjiiwcstilaxiish`, ap-northeast-2). `js/db.js`에는 **publishable 키만** 둔다. 권한은 전부 RLS로 강제하며, 화면 단 관리자 체크는 UX용이다.
 - 스키마 기록: `supabase/migrations/*.sql` (Supabase MCP `apply_migration`으로 적용한 것과 동일). 스키마를 바꾸면 새 번호 파일을 추가하고 같은 내용을 적용한다.
-- 테이블: `product_stock`(사이즈별 재고), `order_events`(주문 상태 이력), `profiles`(auth.users 가입 시 트리거로 생성, `role` user/admin, `status` active/blocked), `products`, `orders`, `order_items`(주문 당시 상품 스냅샷, products FK 없음).
+- 테이블: `product_stock`(사이즈별 재고), `order_events`(주문 상태 이력), `product_images`(Storage `product-images` 경로, 정렬순), `profiles`(auth.users 가입 시 트리거로 생성, `role` user/admin, `status` active/blocked), `products`, `orders`, `order_items`(주문 당시 상품 스냅샷, products FK 없음).
 - `is_admin()`이 RLS의 기준. 일반 회원은 자기 `role`/`status`를 바꿀 수 없고(트리거 `protect_profile_fields`), 관리자는 자기 권한을 내릴 수 없다. SQL 편집기(auth.uid() 없음)에서는 자유롭게 바꿀 수 있다.
-- 주문은 클라이언트가 insert하지 않고 RPC로만 만든다: `create_order(p_items, p_customer)`가 DB 상품가로 금액·배송비·주문명을 계산해 `pending` 주문을 만들고 `{order_id, order_name, amount}`를 돌려준다 → `success.html`이 Edge Function `confirm-payment`를 호출(토스 승인 API → 서비스 롤로 `mark_order_paid`, 일반 사용자 호출 불가), 실패/위젯 닫힘은 `mark_order_failed(order_id, reason)`. `create_order`는 `product_stock`을 조건부 UPDATE로 차감(재고 부족 시 예외)하고, 재고 복구·`order_events` 기록·상태 전이 검증은 `orders_status_guard` 트리거가 맡는다(클라이언트 직접 변경은 관리자의 paid→shipping→delivered만 허용). `pg_cron`이 매분 `expire_pending_orders()`로 10분 지난 pending을 failed 처리. 취소는 Edge Function `cancel-payment`(소유자/관리자 검증 → 토스 취소 → `cancel_order_db`). **배송비 규칙은 `create_order`와 `common.js` 두 곳에 있으므로 함께 바꾼다.**
+- 주문은 클라이언트가 insert하지 않고 RPC로만 만든다: `create_order(p_items, p_customer)`가 DB 상품가로 금액·배송비·주문명을 계산해 `pending` 주문을 만들고 `{order_id, order_name, amount}`를 돌려준다 → `success.html`이 Edge Function `confirm-payment`를 호출(토스 승인 API → 서비스 롤로 `mark_order_paid`, 일반 사용자 호출 불가), 실패/위젯 닫힘은 `mark_order_failed(order_id, reason)`. `create_order`는 `product_stock`을 조건부 UPDATE로 차감(재고 부족 시 예외)하고, 재고 복구·`order_events` 기록·상태 전이 검증은 `orders_status_guard` 트리거가 맡는다(클라이언트 직접 변경은 관리자의 paid→shipping→delivered만 허용하며 이 검사는 security **invoker** 트리거 `orders_transition_guard`가 한다 — definer 트리거 안에서는 `current_user`가 소유자라 역할 검사가 불가능하다. 배송중 전환엔 `courier`/`tracking_no` 필수). `pg_cron`이 매분 `expire_pending_orders()`로 10분 지난 pending을 failed 처리. 취소는 Edge Function `cancel-payment`(소유자/관리자 검증 → 토스 취소 → `cancel_order_db`). **배송비 규칙은 `create_order`와 `common.js` 두 곳에 있으므로 함께 바꾼다.**
 - 관리자 지정: 회원가입 후 SQL로 `update public.profiles set role = 'admin' where email = '...';`
 - 이메일 인증/리다이렉트 URL은 Supabase 대시보드 Authentication 설정에서 관리한다(MCP로 변경 불가).
 
@@ -53,6 +53,12 @@ powershell -ExecutionPolicy Bypass -File serve.ps1 -Port 9000
 - `sessionStorage.fr_buynow`: 상세 페이지 "구매하기"로 바로 결제할 상품. `checkout.html?mode=buynow`일 때 장바구니 대신 사용.
 - `sessionStorage.fr_pending_order`: 결제 요청 직전에 저장하는 `{orderId, orderName, amount, mode, items}`(orderId/amount는 `create_order` 결과). `success.html`이 리다이렉트 파라미터(`orderId`, `amount`)와 비교하고 DB(`mark_order_paid`)로 한 번 더 확인한 뒤, `mode === "cart"`면 장바구니를 비운다.
 - 배송비 규칙: `SHIPPING_FREE_OVER`(50,000원) 이상 무료, 미만 `SHIPPING_FEE`(3,000원). `calcOrder`에서만 계산한다.
+
+### 이미지 / 배송 / 알림
+- `productImage(p, variant)`: `p.images[variant]`(db.js가 `product_images`에서 로드)가 있으면 `<img>`(Storage 공개 URL, 변환은 Pro 플랜 기능이라 원본 사용), 없으면 SVG 폴백. 관리자 상품 폼에서 업로드/순서/삭제(Storage RLS는 관리자만).
+- 마이페이지 주문 카드에 결제완료→배송중→배송완료 타임라인과 운송장 링크(`COURIERS`/`trackingUrl`, db.js). 관리자 주문 탭은 Realtime(`orders`)으로 갱신·토스트.
+- Edge Function `send-email`(Resend, secret `RESEND_API_KEY`, 선택 `EMAIL_FROM`): confirm/cancel-payment가 서비스 롤 키로, 관리자가 배송 시작 시 JWT로 호출. 키가 없으면 발송을 건너뛴다. 인증 메일 SMTP는 대시보드 수동 설정.
+- 회원가입은 이메일 인증 없음: `auto_confirm_email` 트리거(005)가 가입 즉시 인증 처리.
 
 ### 토스페이먼츠 연동 (`js/checkout.js`)
 - SDK: `https://js.tosspayments.com/v2/standard` (checkout.html에서 로드).

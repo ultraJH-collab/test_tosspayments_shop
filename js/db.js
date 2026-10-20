@@ -16,6 +16,18 @@ const ORDER_STATUS = {
   failed: "결제실패",
 };
 
+// 택배사 조회 링크(외부 링크만 제공, 실시간 API 연동은 하지 않는다)
+const COURIERS = {
+  "CJ대한통운": (n) => "https://trace.cjlogistics.com/next/tracking.html?wblNo=" + encodeURIComponent(n),
+  "한진택배": (n) => "https://www.hanjin.com/kor/CMS/DeliveryMgr/WaybillResult.do?mCode=MN038&schLang=KR&wblnumText2=" + encodeURIComponent(n),
+  "우체국택배": (n) => "https://service.epost.go.kr/trace.RetrieveDomRigiTraceList.comm?sid1=" + encodeURIComponent(n),
+  "롯데택배": () => "https://www.lotteglogis.com/home/reservation/tracking/index",
+  "로젠택배": () => "https://www.ilogen.com/web/personal/trace",
+};
+function trackingUrl(courier, no) {
+  return COURIERS[courier] ? COURIERS[courier](no) : null;
+}
+
 /* ---------- 회원 세션 ---------- */
 const Auth = {
   user: null,
@@ -56,16 +68,20 @@ function loginUrl() {
 
 /* ---------- 상품 ---------- */
 async function loadProducts() {
-  const [{ data, error }, { data: stockRows }] = await Promise.all([
+  const [{ data, error }, { data: stockRows }, { data: imageRows }] = await Promise.all([
     sb.from("products").select("*").order("id"),
     sb.from("product_stock").select("product_id, size, stock"),
+    sb.from("product_images").select("product_id, path").order("sort_order").order("id"),
   ]);
+  // 상품별 이미지 경로(대표 1 + 상세 N, 정렬순)
+  const images = {};
+  (imageRows || []).forEach((r) => (images[r.product_id] = images[r.product_id] || []).push(r.path));
   if (error) throw error;
   // 상품별 사이즈 재고 { [size]: n }. 재고를 못 읽으면 stock 은 null(제한 없음으로 취급).
   const stock = {};
   (stockRows || []).forEach((r) => ((stock[r.product_id] = stock[r.product_id] || {})[r.size] = r.stock));
   // 관리자는 숨김 상품도 조회되지만, 매장 화면에는 판매중 상품만 보여준다.
-  PRODUCTS.splice(0, PRODUCTS.length, ...data.filter((p) => p.is_active).map((p) => ({ ...p, rating: Number(p.rating), stock: stockRows ? stock[p.id] || {} : null })));
+  PRODUCTS.splice(0, PRODUCTS.length, ...data.filter((p) => p.is_active).map((p) => ({ ...p, rating: Number(p.rating), images: images[p.id] || [], stock: stockRows ? stock[p.id] || {} : null })));
 }
 
 // 사이즈 재고(stock이 null이면 알 수 없음 → 제한하지 않음). 실제 차감/검증은 create_order 가 한다.

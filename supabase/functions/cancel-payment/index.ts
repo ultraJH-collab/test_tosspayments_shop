@@ -54,5 +54,12 @@ Deno.serve(async (req) => {
     console.error("cancel_order_db failed after toss cancel", order.id, error.message);
     return json({ error: "결제는 취소되었으나 주문 처리에 실패했습니다. 고객센터에 문의해 주세요." }, 500);
   }
+
+  // 메일 알림(실패해도 결제/취소 결과에는 영향 없음)
+  await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-email`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ orderId: order.id, type: "canceled" }),
+  }).catch((e) => console.error("send-email", e));
   return json(data);
 });

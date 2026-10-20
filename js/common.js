@@ -73,7 +73,14 @@ const SHAPES = {
     '<path d="M182 232 L214 262 M200 222 L232 252 M218 214 L246 240" fill="none" stroke="rgba(0,0,0,.2)" stroke-width="5" stroke-linecap="round"/>',
 };
 
+// Storage 공개 URL. (이미지 변환 /render/image 는 Pro 플랜 기능이라 원본을 쓰고 lazy 로딩한다.)
+function imageUrl(path) {
+  return `${SUPABASE_URL}/storage/v1/object/public/product-images/${path.split("/").map(encodeURIComponent).join("/")}`;
+}
 function productImage(p, variant = 0) {
+  // 업로드된 이미지가 있으면 <img>, 없거나 해당 순번이 없으면 기존 SVG 일러스트로 폴백한다.
+  const path = p.images && p.images[variant];
+  if (path) return `<img class="pimg" src="${escapeHtml(imageUrl(path))}" alt="${escapeHtml(p.name)}" loading="lazy" />`;
   const hex = (c, d) => (/^#[0-9a-f]{6}$/i.test(c) ? c : d);
   const bgs = [hex(p.tone, "#f2f2f2"), "#f4f4f4", "#e9e9e9", "#ffffff"];
   const scale = [1, 1.25, 0.85, 1][variant % 4];

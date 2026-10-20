@@ -136,6 +136,60 @@ onReady(() => {
       .map((s) => `<label class="check" style="gap:4px">${escapeHtml(s)} <input type="number" min="0" data-size="${escapeHtml(s)}" value="${cur[s] ?? 0}" style="width:70px" /></label>`)
       .join("");
   }
+  /* 이미지: items = [{ id?, path?, file?, url }] (저장 시 업로드/정렬/삭제 반영) */
+  let imgItems = [];
+  let removedImages = [];
+  function renderImages() {
+    $("f-images").innerHTML = imgItems
+      .map((it, i) => `<div class="im"><img src="${escapeHtml(it.url)}" alt="" />${i === 0 ? "대표" : i + 1}<br>
+        <button type="button" data-im="left" data-i="${i}" ${i === 0 ? "disabled" : ""}>◀</button><button type="button" data-im="del" data-i="${i}">삭제</button><button type="button" data-im="right" data-i="${i}" ${i === imgItems.length - 1 ? "disabled" : ""}>▶</button></div>`)
+      .join("");
+  }
+  $("f-images").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-im]");
+    if (!b) return;
+    const i = Number(b.dataset.i);
+    if (b.dataset.im === "del") {
+      const [it] = imgItems.splice(i, 1);
+      if (it.id) removedImages.push(it);
+    } else {
+      const j = b.dataset.im === "left" ? i - 1 : i + 1;
+      [imgItems[i], imgItems[j]] = [imgItems[j], imgItems[i]];
+    }
+    renderImages();
+  });
+  $("f-image-files").addEventListener("change", (e) => {
+    for (const file of e.target.files) {
+      if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) { toast(`${file.name}: jpg/png/webp만 올릴 수 있습니다.`); continue; }
+      if (file.size > 5 * 1024 * 1024) { toast(`${file.name}: 5MB를 넘습니다.`); continue; }
+      imgItems.push({ file, url: URL.createObjectURL(file) });
+    }
+    e.target.value = "";
+    renderImages();
+  });
+  async function saveImages(productId) {
+    const ext = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
+    for (const it of imgItems) {
+      if (it.file) {
+        const path = `${productId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext[it.file.type]}`;
+        const { error } = await sb.storage.from("product-images").upload(path, it.file, { contentType: it.file.type });
+        if (error) throw error;
+        it.path = path;
+      }
+    }
+    if (removedImages.length) {
+      await sb.storage.from("product-images").remove(removedImages.map((r) => r.path));
+      const { error } = await sb.from("product_images").delete().in("id", removedImages.map((r) => r.id));
+      if (error) throw error;
+    }
+    for (const [i, it] of imgItems.entries()) {
+      const { data, error } = it.id
+        ? await sb.from("product_images").update({ sort_order: i }).eq("id", it.id).select().single()
+        : await sb.from("product_images").insert({ product_id: productId, path: it.path, sort_order: i }).select().single();
+      if (error) throw error;
+      it.id = data.id;
+    }
+  }
   function stockValues() {
     const v = {};
     $("f-stock").querySelectorAll("input").forEach((i) => (v[i.dataset.size] = Math.max(0, parseInt(i.value, 10) || 0)));
@@ -173,6 +227,13 @@ onReady(() => {
       v.sizes.forEach((s) => (cur[s] = 10));
     }
     renderStock(cur);
+    removedImages = [];
+    imgItems = [];
+    if (p) {
+      const { data: imgs } = await sb.from("product_images").select("id, path").eq("product_id", p.id).order("sort_order").order("id");
+      imgItems = (imgs || []).map((r) => ({ id: r.id, path: r.path, url: imageUrl(r.path) }));
+    }
+    renderImages();
     dlg.showModal();
   }
   $("p-new").onclick = () => openProductForm(null);
@@ -211,6 +272,11 @@ onReady(() => {
       await sb.from("product_stock").delete().eq("product_id", data.id).not("size", "in", `(${keep})`);
     }
     if (stockErr) toast("상품은 저장했지만 재고 저장에 실패했습니다: " + stockErr.message);
+    try {
+      await saveImages(data.id);
+    } catch (imgErr) {
+      toast("상품은 저장했지만 이미지 저장에 실패했습니다: " + imgErr.message);
+    }
 
     const saved = { ...data, rating: Number(data.rating) };
     if (editing) Object.assign(editing, saved);
@@ -308,6 +374,8 @@ onReady(() => {
     return `<span class="status status-${o.status}">${ORDER_STATUS[o.status]}</span>${
       next ? ` <button type="button" class="btn-cancel-order" data-advance="${escapeHtml(o.id)}">${ORDER_STATUS[next]}으로</button>` : ""
     }${o.status === "paid" ? ` <button type="button" class="btn-cancel-order" data-cancel="${escapeHtml(o.id)}">결제 취소</button>` : ""}${
+      o.tracking_no ? `<br><small class="muted">${escapeHtml(o.courier || "")} ${escapeHtml(o.tracking_no)}</small>` : ""
+    }${
       o.fail_reason ? `<br><small class="muted">${escapeHtml(o.fail_reason)}</small>` : o.cancel_reason ? `<br><small class="muted">${escapeHtml(o.cancel_reason)}</small>` : ""
     }`;
   }
@@ -345,12 +413,22 @@ onReady(() => {
     if (!o) return;
     btn.disabled = true;
     if (btn.dataset.advance) {
-      const { data, error } = await sb.from("orders").update({ status: NEXT_STATUS[o.status] }).eq("id", o.id).select().single();
+      const patch = { status: NEXT_STATUS[o.status] };
+      if (patch.status === "shipping") {
+        const courier = prompt(`택배사를 입력해 주세요. (${Object.keys(COURIERS).join(" / ")})`, "CJ대한통운");
+        if (courier === null) return (btn.disabled = false);
+        const no = prompt("운송장 번호를 입력해 주세요.");
+        if (no === null) return (btn.disabled = false);
+        patch.courier = courier.trim();
+        patch.tracking_no = no.trim();
+      }
+      const { data, error } = await sb.from("orders").update(patch).eq("id", o.id).select().single();
       if (error) {
         btn.disabled = false;
         return toast(error.message);
       }
       Object.assign(o, data);
+      sb.functions.invoke("send-email", { body: { orderId: o.id, type: o.status } }); // 배송 시작/완료 알림(실패해도 무시)
       toast(`주문 상태를 '${ORDER_STATUS[o.status]}'(으)로 변경했습니다.`);
     } else {
       const reason = prompt("취소 사유를 입력해 주세요. 토스 결제가 전액 취소되고 재고가 복구됩니다.", "관리자 취소");
@@ -368,6 +446,20 @@ onReady(() => {
     }
     renderOrders();
   });
+
+  /* 주문 변경 실시간 반영(Realtime). 구독도 RLS를 따르므로 관리자만 타인 주문을 받는다. */
+  let refreshTimer = null;
+  sb.channel("admin-orders")
+    .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, (payload) => {
+      const o = payload.new || {};
+      if (payload.eventType === "UPDATE" && o.status === "paid") toast(`새 주문이 결제되었습니다. (${o.order_name || o.id})`);
+      else if (payload.eventType === "UPDATE" && o.status === "canceled") toast(`주문이 취소되었습니다. (${o.order_name || o.id})`);
+      if (state.loaded.orders) {
+        clearTimeout(refreshTimer);
+        refreshTimer = setTimeout(loadOrders, 500);
+      }
+    })
+    .subscribe();
 
   const initial = location.hash.slice(1);
   showTab(loaders[initial] ? initial : "products");
