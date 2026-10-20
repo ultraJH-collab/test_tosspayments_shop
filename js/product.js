@@ -141,6 +141,40 @@ onReady(() => {
     renderReviews();
   });
 
+  /* 상품 Q&A: 비밀글은 작성자/관리자에게만 조회된다(RLS). 수정 불가·삭제만 가능. */
+  const qnaList = async () => {
+    const { data, error } = sb ? await sb.from("product_questions").select("*").eq("product_id", p.id).order("created_at", { ascending: false }) : { data: [] };
+    if (error) return ($("qna").innerHTML = `<p class="muted">${escapeHtml(error.message)}</p>`);
+    $("qna-count").textContent = num(data.length);
+    $("qna").innerHTML = data.length
+      ? data.map((q) => `<div class="qna"><div class="q-top"><span>${q.answered_at ? "답변완료" : "답변대기"}</span><span>${escapeHtml(q.author)}</span><span>${new Date(q.created_at).toLocaleDateString("ko-KR")}</span>${q.is_secret ? '<span class="pill">비밀글</span>' : ""}${Auth.user && (q.user_id === Auth.user.id || Auth.isAdmin) ? `<button type="button" class="link-btn" data-qdel="${q.id}">삭제</button>` : ""}</div><p>${escapeHtml(q.body)}</p>${q.answer ? `<div class="q-answer"><b>판매자 답변</b><br>${escapeHtml(q.answer)}</div>` : ""}</div>`).join("")
+      : `<p class="muted">등록된 문의가 없습니다.</p>`;
+  };
+  $("qna-form-box").innerHTML = Auth.user
+    ? `<form class="qna-form" id="qna-form"><textarea id="qna-body" maxlength="1000" placeholder="상품에 대해 궁금한 점을 남겨 주세요." required></textarea><label class="check"><input type="checkbox" id="qna-secret" /> 비밀글</label><button type="submit" class="btn btn-black btn-sm">문의 등록</button></form>`
+    : `<p class="muted"><a class="guest-login" href="${loginUrl()}">로그인하고 문의하기 ›</a></p>`;
+  const qform = $("qna-form");
+  if (qform) {
+    qform.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const body = $("qna-body").value.trim();
+      if (!body) return;
+      const { error } = await sb.from("product_questions").insert({ product_id: p.id, user_id: Auth.user.id, body, is_secret: $("qna-secret").checked });
+      if (error) return toast(error.message);
+      qform.reset();
+      toast("문의를 등록했어요.");
+      qnaList();
+    });
+  }
+  $("qna").addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-qdel]");
+    if (!b || !confirm("이 문의를 삭제할까요?")) return;
+    const { error } = await sb.from("product_questions").delete().eq("id", Number(b.dataset.qdel));
+    if (error) return toast(error.message);
+    qnaList();
+  });
+  qnaList();
+
   /* 추천 */
   $("related").innerHTML = PRODUCTS.filter((x) => x.cat === p.cat && x.id !== p.id)
     .slice(0, 4)

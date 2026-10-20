@@ -15,7 +15,9 @@ onReady(async () => {
     return;
   }
 
-  const o = calcOrder(items);
+  let o = calcOrder(items);
+  let coupon = null; // { code, name, discount } — 표시용. 실제 할인은 create_order 가 다시 계산한다.
+  let widgets;
 
   root.innerHTML = `
     <div class="order-layout">
@@ -67,13 +69,21 @@ onReady(async () => {
         <h3>결제 금액</h3>
         <div class="sum-row"><span>상품 금액</span><span>${won(o.origin)}</span></div>
         <div class="sum-row disc"><span>할인 금액</span><span>-${won(o.discount)}</span></div>
-        <div class="sum-row"><span>배송비</span><span>${o.shipping ? won(o.shipping) : "무료"}</span></div>
-        <div class="sum-total"><span>최종 결제 금액</span><strong>${won(o.total)}</strong></div>
+        <div class="sum-row disc" id="sum-coupon-row" hidden><span>쿠폰 할인</span><span id="sum-coupon"></span></div>
+        <div class="sum-row"><span>배송비</span><span id="sum-ship">${o.shipping ? won(o.shipping) : "무료"}</span></div>
+        <div class="sum-total"><span>최종 결제 금액</span><strong id="sum-total">${won(o.total)}</strong></div>
+        <div class="coupon-box">
+          ${Auth.user
+            ? `<div class="inline"><input id="coupon-code" placeholder="쿠폰 코드" autocomplete="off" /><button type="button" class="btn btn-line btn-sm" id="btn-coupon">적용</button></div>
+               <p class="muted" id="coupon-msg"></p>`
+            : `<p class="muted"><a class="guest-login" href="${loginUrl()}">로그인하면 쿠폰을 사용할 수 있어요 ›</a></p>`}
+        </div>
         <button type="button" class="btn btn-blue" id="btn-pay" disabled>결제 준비 중...</button>
         <p class="pay-error" id="pay-error"></p>
       </aside>
     </div>`;
 
+  let payReady = false;
   const payBtn = document.getElementById("btn-pay");
   const errEl = document.getElementById("pay-error");
   const showError = (msg) => (errEl.textContent = msg);
@@ -121,6 +131,42 @@ onReady(async () => {
     toast("퍼블리싱 데모: 예시 주소를 입력했어요.");
   };
 
+  // 쿠폰 적용/해제: 요약과 결제위젯 금액을 함께 갱신한다.
+  async function refreshTotals() {
+    o = calcOrder(items, coupon ? coupon.discount : 0);
+    document.getElementById("sum-coupon-row").hidden = !coupon;
+    document.getElementById("sum-coupon").textContent = coupon ? `-${won(o.coupon)}` : "";
+    document.getElementById("sum-ship").textContent = o.shipping ? won(o.shipping) : "무료";
+    document.getElementById("sum-total").textContent = won(o.total);
+    if (widgets) await widgets.setAmount({ currency: "KRW", value: o.total });
+    if (payReady) payBtn.textContent = `${won(o.total)} 결제하기`;
+  }
+  const couponBtn = document.getElementById("btn-coupon");
+  if (couponBtn) {
+    const msg = document.getElementById("coupon-msg");
+    couponBtn.onclick = async () => {
+      if (coupon) {
+        coupon = null;
+        document.getElementById("coupon-code").value = "";
+        document.getElementById("coupon-code").disabled = false;
+        couponBtn.textContent = "적용";
+        msg.textContent = "";
+        return refreshTotals();
+      }
+      const code = document.getElementById("coupon-code").value.trim().toUpperCase();
+      if (!code) return (msg.textContent = "쿠폰 코드를 입력해 주세요.");
+      couponBtn.disabled = true;
+      const { data, error } = await sb.rpc("validate_coupon", { p_code: code, p_subtotal: o.subtotal });
+      couponBtn.disabled = false;
+      if (error || !data.ok) return (msg.textContent = (error && error.message) || data.message);
+      coupon = { code, name: data.name, discount: data.discount };
+      document.getElementById("coupon-code").disabled = true;
+      couponBtn.textContent = "해제";
+      msg.textContent = `'${data.name}' 적용 (-${won(data.discount)})`;
+      refreshTotals();
+    };
+  }
+
   /* ---------- 토스페이먼츠 결제위젯 ---------- */
   if (location.protocol === "file:") {
     payBtn.textContent = "결제 불가";
@@ -139,7 +185,6 @@ onReady(async () => {
     return showError("주문 서버(Supabase)에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.");
   }
 
-  let widgets;
   try {
     const tossPayments = TossPayments(TOSS_CLIENT_KEY);
     // 회원은 회원 ID를 customerKey로 써서 토스 쪽에서도 구매자를 구분한다.
@@ -153,6 +198,7 @@ onReady(async () => {
 
     payBtn.disabled = false;
     payBtn.textContent = `${won(o.total)} 결제하기`;
+    payReady = true;
 
     agreement.on("agreementStatusChange", (status) => {
       payBtn.disabled = !status.agreedRequiredTerms;
@@ -186,6 +232,7 @@ onReady(async () => {
         addr2: document.getElementById("c-addr2").value.trim(),
         memo: memo.selectedIndex > 0 ? memo.value : "",
       },
+      p_coupon_code: coupon ? coupon.code : null,
     });
     if (error) {
       payBtn.disabled = false;

@@ -41,7 +41,7 @@ powershell -ExecutionPolicy Bypass -File serve.ps1 -Port 9000
 - 스키마 기록: `supabase/migrations/*.sql` (Supabase MCP `apply_migration`으로 적용한 것과 동일). 스키마를 바꾸면 새 번호 파일을 추가하고 같은 내용을 적용한다.
 - 테이블: `product_stock`(사이즈별 재고), `order_events`(주문 상태 이력), `product_images`(Storage `product-images` 경로, 정렬순), `wishlists`·`cart_items`·`addresses`(본인만, RLS), `reviews`(delivered 주문 항목당 1회·숨김은 관리자), `profiles`(auth.users 가입 시 트리거로 생성, `role` user/admin, `status` active/blocked), `products`, `orders`, `order_items`(주문 당시 상품 스냅샷, products FK 없음).
 - `is_admin()`이 RLS의 기준. 일반 회원은 자기 `role`/`status`를 바꿀 수 없고(트리거 `protect_profile_fields`), 관리자는 자기 권한을 내릴 수 없다. SQL 편집기(auth.uid() 없음)에서는 자유롭게 바꿀 수 있다.
-- 주문은 클라이언트가 insert하지 않고 RPC로만 만든다: `create_order(p_items, p_customer)`가 DB 상품가로 금액·배송비·주문명을 계산해 `pending` 주문을 만들고 `{order_id, order_name, amount}`를 돌려준다 → `success.html`이 Edge Function `confirm-payment`를 호출(토스 승인 API → 서비스 롤로 `mark_order_paid`, 일반 사용자 호출 불가), 실패/위젯 닫힘은 `mark_order_failed(order_id, reason)`. `create_order`는 `product_stock`을 조건부 UPDATE로 차감(재고 부족 시 예외)하고, 재고 복구·`order_events` 기록·상태 전이 검증은 `orders_status_guard` 트리거가 맡는다(클라이언트 직접 변경은 관리자의 paid→shipping→delivered만 허용하며 이 검사는 security **invoker** 트리거 `orders_transition_guard`가 한다 — definer 트리거 안에서는 `current_user`가 소유자라 역할 검사가 불가능하다. 배송중 전환엔 `courier`/`tracking_no` 필수). `pg_cron`이 매분 `expire_pending_orders()`로 10분 지난 pending을 failed 처리. 취소는 Edge Function `cancel-payment`(소유자/관리자 검증 → 토스 취소 → `cancel_order_db`). **배송비 규칙은 `create_order`와 `common.js` 두 곳에 있으므로 함께 바꾼다.**
+- 주문은 클라이언트가 insert하지 않고 RPC로만 만든다: `create_order(p_items, p_customer)`가 DB 상품가로 금액·배송비·주문명을 계산해 `pending` 주문을 만들고 `{order_id, order_name, amount}`를 돌려준다 → `success.html`이 Edge Function `confirm-payment`를 호출(토스 승인 API → 서비스 롤로 `mark_order_paid`, 일반 사용자 호출 불가), 실패/위젯 닫힘은 `mark_order_failed(order_id, reason)`. `create_order`는 `product_stock`을 조건부 UPDATE로 차감(재고 부족 시 예외)하고, 재고 복구·`order_events` 기록·상태 전이 검증은 `orders_status_guard` 트리거가 맡는다(클라이언트 직접 변경은 관리자의 paid→shipping→delivered만 허용하며 이 검사는 security **invoker** 트리거 `orders_transition_guard`가 한다 — definer 트리거 안에서는 `current_user`가 소유자라 역할 검사가 불가능하다. 배송중 전환엔 `courier`/`tracking_no` 필수). `pg_cron`이 매분 `expire_pending_orders()`로 10분 지난 pending을 failed 처리. 취소는 Edge Function `cancel-payment`(소유자/관리자 검증 → 토스 취소 → `cancel_order_db`). **배송비·쿠폰 할인 규칙은 `create_order`와 `common.js`(`calcOrder`) 두 곳에 있으므로 함께 바꾼다.**
 - 관리자 지정: 회원가입 후 SQL로 `update public.profiles set role = 'admin' where email = '...';`
 - 이메일 인증/리다이렉트 URL은 Supabase 대시보드 Authentication 설정에서 관리한다(MCP로 변경 불가).
 
@@ -61,6 +61,11 @@ powershell -ExecutionPolicy Bypass -File serve.ps1 -Port 9000
 - 검색/필터: `search_products(q)` RPC(pg_trgm, 오타 완화). `js/list.js`가 tops/pants/shoes/search 공용이며 필터·정렬 UI를 `.toolbar` 뒤에 주입한다(HTML은 data-page만 다르게). `search.html`은 tops.html 복사본.
 - 배송지: `addresses`(최대 10, 기본 1개는 트리거). 결제 화면에서 선택/저장, 주문은 스냅샷.
 - 계정: 로그인 화면의 Google 버튼(provider 활성화 여부를 `/auth/v1/settings`로 먼저 확인), 비밀번호 재설정(`reset-password.html`), 마이페이지 비밀번호 변경·탈퇴(Edge Function `delete-account` — 진행 중 주문·관리자는 거부). Google OAuth 클라이언트와 리다이렉트 URL은 대시보드 수동 설정.
+
+### Phase 4 (성장·관리, 마이그레이션 010)
+- 쿠폰: `coupons`(관리자만 직접 접근), `coupon_redemptions`(used/restored). `create_order(p_items, p_customer, p_coupon_code)`가 `coupon_apply`로 검증·할인 계산(한도 경쟁은 쿠폰 행 잠금), 결제 화면은 `validate_coupon` RPC로 표시만 한다. 할인은 상품금액에만, 무료배송은 할인 후 금액 기준. 취소·실패·만료 시 `orders_status_guard`가 쿠폰 복구.
+- `product_questions`(비밀글 RLS, 답변은 관리자만 `answer` 컬럼 update), `banners`(노출 기간 RLS, Storage `banners`), `notices`, `faqs`. 페이지: `notice.html`, `faq.html`(`js/content.js`), 홈 배너, 상품 상세 Q&A.
+- `audit_logs`: `audit_row()` 트리거로만 기록, 관리자 조회 전용. `admin_dashboard(from,to,unit)` RPC가 대시보드 집계. 관리자 탭: Q&A / 쿠폰 / 배너·공지·FAQ / 매출 대시보드 / 감사 로그, 상품·회원·주문 CSV 내보내기(`downloadCsv`), 주문 일괄 다음 단계.
 
 ### 이미지 / 배송 / 알림
 - `productImage(p, variant)`: `p.images[variant]`(db.js가 `product_images`에서 로드)가 있으면 `<img>`(Storage 공개 URL, 변환은 Pro 플랜 기능이라 원본 사용), 없으면 SVG 폴백. 관리자 상품 폼에서 업로드/순서/삭제(Storage RLS는 관리자만).

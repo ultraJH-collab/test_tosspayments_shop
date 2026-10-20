@@ -16,7 +16,99 @@
       <button type="button" data-tab="members">회원 관리</button>
       <button type="button" data-tab="orders">주문 관리</button>
       <button type="button" data-tab="reviews">후기 관리</button>
+      <button type="button" data-tab="qna">Q&amp;A</button>
+      <button type="button" data-tab="coupons">쿠폰</button>
+      <button type="button" data-tab="content">배너·공지·FAQ</button>
+      <button type="button" data-tab="dashboard">매출 대시보드</button>
+      <button type="button" data-tab="audit">감사 로그</button>
     </nav>
+
+    <!-- Q&A -->
+    <section class="admin-panel hidden" id="tab-qna">
+      <div class="admin-toolbar">
+        <input type="search" id="q-search" placeholder="상품 ID, 내용 검색" />
+        <select id="q-state"><option value="">전체</option><option value="0">답변대기</option><option value="1">답변완료</option></select>
+        <span class="admin-count" id="q-count"></span>
+      </div>
+      <div class="table-wrap"><table class="admin-table">
+        <thead><tr><th>작성일</th><th>상품</th><th>작성자</th><th>문의</th><th>답변</th><th>관리</th></tr></thead>
+        <tbody id="q-rows"></tbody></table></div>
+    </section>
+
+    <!-- 쿠폰 -->
+    <section class="admin-panel hidden" id="tab-coupons">
+      <form class="admin-toolbar" id="c-form">
+        <input name="code" placeholder="코드 (영문대문자/숫자)" required style="width:170px" />
+        <input name="name" placeholder="쿠폰명" required style="width:150px" />
+        <select name="kind"><option value="amount">정액(원)</option><option value="percent">정률(%)</option></select>
+        <input name="value" type="number" min="1" placeholder="할인값" required style="width:90px" />
+        <input name="min_order" type="number" min="0" placeholder="최소주문" style="width:100px" />
+        <input name="max_discount" type="number" min="1" placeholder="최대할인" style="width:100px" />
+        <input name="total_limit" type="number" min="1" placeholder="총 한도" style="width:90px" />
+        <input name="per_user_limit" type="number" min="1" placeholder="1인 한도(1)" style="width:100px" />
+        <input name="starts_at" type="datetime-local" title="시작" style="width:190px" />
+        <input name="ends_at" type="datetime-local" title="종료" style="width:190px" />
+        <button type="submit" class="btn btn-black btn-sm">+ 쿠폰 등록</button>
+      </form>
+      <p class="pay-error" id="c-error"></p>
+      <div class="table-wrap"><table class="admin-table">
+        <thead><tr><th>코드</th><th>이름</th><th>혜택</th><th>조건</th><th>기간</th><th>사용</th><th>상태</th><th>관리</th></tr></thead>
+        <tbody id="c-rows"></tbody></table></div>
+    </section>
+
+    <!-- 배너 / 공지 / FAQ -->
+    <section class="admin-panel hidden" id="tab-content">
+      <h3 class="admin-sub">메인 배너</h3>
+      <form class="admin-toolbar" id="b-form">
+        <input name="title" placeholder="제목(대체 텍스트)" style="width:170px" />
+        <input name="image" type="file" accept="image/jpeg,image/png,image/webp" required style="width:220px" />
+        <input name="link_url" placeholder="링크 (예: tops.html)" style="width:170px" />
+        <input name="starts_at" type="datetime-local" title="노출 시작" style="width:190px" />
+        <input name="ends_at" type="datetime-local" title="노출 종료" style="width:190px" />
+        <button type="submit" class="btn btn-black btn-sm">+ 배너 등록</button>
+      </form>
+      <div class="table-wrap"><table class="admin-table"><thead><tr><th>이미지</th><th>제목</th><th>링크</th><th>기간</th><th>순서</th><th>상태</th><th>관리</th></tr></thead><tbody id="b-rows"></tbody></table></div>
+
+      <h3 class="admin-sub">공지사항</h3>
+      <form class="admin-toolbar" id="n-form">
+        <input name="title" placeholder="제목" required style="width:240px" />
+        <input name="body" placeholder="내용" style="width:360px" />
+        <label class="check"><input name="is_pinned" type="checkbox" /> 상단 고정</label>
+        <button type="submit" class="btn btn-black btn-sm">+ 공지 등록</button>
+      </form>
+      <div class="table-wrap"><table class="admin-table"><thead><tr><th>작성일</th><th>제목</th><th>내용</th><th>고정</th><th>관리</th></tr></thead><tbody id="n-rows"></tbody></table></div>
+
+      <h3 class="admin-sub">FAQ</h3>
+      <form class="admin-toolbar" id="f-form">
+        <input name="question" placeholder="질문" required style="width:280px" />
+        <input name="answer" placeholder="답변" style="width:340px" />
+        <input name="sort_order" type="number" placeholder="순서" style="width:80px" />
+        <button type="submit" class="btn btn-black btn-sm">+ FAQ 등록</button>
+      </form>
+      <div class="table-wrap"><table class="admin-table"><thead><tr><th>순서</th><th>질문</th><th>답변</th><th>관리</th></tr></thead><tbody id="f-rows"></tbody></table></div>
+    </section>
+
+    <!-- 매출 대시보드 -->
+    <section class="admin-panel hidden" id="tab-dashboard">
+      <div class="admin-toolbar">
+        <input type="date" id="d-from" style="width:160px" /> ~ <input type="date" id="d-to" style="width:160px" />
+        <select id="d-unit"><option value="day">일별</option><option value="week">주별</option><option value="month">월별</option></select>
+        <button type="button" class="btn btn-black btn-sm" id="d-run">조회</button>
+      </div>
+      <p class="pay-error" id="d-error"></p>
+      <div id="d-body"></div>
+    </section>
+
+    <!-- 감사 로그 -->
+    <section class="admin-panel hidden" id="tab-audit">
+      <div class="admin-toolbar">
+        <select id="a-table"><option value="">전체 대상</option><option>products</option><option>product_stock</option><option>orders</option><option>profiles</option><option>coupons</option></select>
+        <span class="admin-count" id="a-count"></span>
+      </div>
+      <div class="table-wrap"><table class="admin-table">
+        <thead><tr><th>일시</th><th>대상</th><th>ID</th><th>동작</th><th>수행자</th><th>변경 내용</th></tr></thead>
+        <tbody id="a-rows"></tbody></table></div>
+    </section>
 
     <!-- 후기 관리 -->
     <section class="admin-panel hidden" id="tab-reviews">
@@ -44,6 +136,7 @@
           <option value="0">숨김</option>
         </select>
         <span class="admin-count" id="p-count"></span>
+        <button type="button" class="btn btn-line btn-sm" id="p-csv">CSV</button>
         <button type="button" class="btn btn-black btn-sm" id="p-new">+ 상품 등록</button>
       </div>
       <div class="table-wrap">
@@ -59,6 +152,7 @@
       <div class="admin-toolbar">
         <input type="search" id="m-search" placeholder="이메일, 이름, 휴대폰 검색" />
         <span class="admin-count" id="m-count"></span>
+        <button type="button" class="btn btn-line btn-sm" id="m-csv">CSV</button>
       </div>
       <div class="table-wrap">
         <table class="admin-table">
@@ -74,10 +168,12 @@
         <input type="search" id="o-search" placeholder="주문번호, 주문자 검색" />
         <select id="o-status"><option value="">전체 상태</option></select>
         <span class="admin-count" id="o-count"></span>
+        <button type="button" class="btn btn-line btn-sm" id="o-bulk">선택 주문 일괄 다음 단계</button>
+        <button type="button" class="btn btn-line btn-sm" id="o-csv">CSV</button>
       </div>
       <div class="table-wrap">
         <table class="admin-table">
-          <thead><tr><th>주문일시</th><th>주문번호</th><th>주문자</th><th>주문상품</th><th>결제금액</th><th>상태</th></tr></thead>
+          <thead><tr><th><input type="checkbox" id="o-all" aria-label="전체 선택" /></th><th>주문일시</th><th>주문번호</th><th>주문자</th><th>주문상품</th><th>결제금액</th><th>상태</th></tr></thead>
           <tbody id="o-rows"></tbody>
         </table>
       </div>

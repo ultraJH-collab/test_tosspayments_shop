@@ -10,6 +10,7 @@
   <header id="site-header"></header>
 
   <main>
+    <div class="inner"><div class="banners" id="banners" hidden></div></div>
     <section class="hero" id="hero"></section>
 
     <div class="inner">
@@ -45,6 +46,21 @@
             <div class="hero-copy"><small>${h.small}</small><strong>${h.title}</strong></div></a>`;
         })
         .join("");
+
+      // 노출 중인 배너(RLS가 기간/활성 여부를 걸러 준다). 링크는 같은 사이트 상대경로와 http(s)만 허용.
+      if (sb) {
+        sb.from("banners").select("*").order("sort_order").order("id").then(({ data }) => {
+          const list = (data || []).filter((b) => b.is_active && (!b.starts_at || new Date(b.starts_at) <= new Date()) && (!b.ends_at || new Date(b.ends_at) >= new Date()));
+          if (!list.length) return;
+          const el = document.getElementById("banners");
+          el.hidden = false;
+          el.innerHTML = list.map((b) => {
+            const ok = /^(https?:\/\/|[\w./?=&#-]+$)/.test(b.link_url);
+            const img = `<img src="${SUPABASE_URL}/storage/v1/object/public/banners/${b.image_path.split("/").map(encodeURIComponent).join("/")}" alt="${escapeHtml(b.title)}" loading="lazy" />`;
+            return ok && b.link_url ? `<a href="${escapeHtml(b.link_url)}">${img}</a>` : `<a>${img}</a>`;
+          }).join("");
+        });
+      }
 
       document.getElementById("home-sections").innerHTML = Object.entries(CATEGORIES)
         .map(([key, c]) => {

@@ -64,15 +64,17 @@ const Cart = {
   },
 };
 
-function calcOrder(items) {
+// couponDiscount: 쿠폰 할인액(표시용). 할인은 상품금액에만 적용하고 무료배송은 할인 후 금액 기준(create_order 와 동일).
+function calcOrder(items, couponDiscount = 0) {
   const lines = items.map((i) => {
     const p = findProduct(i.id);
     return { ...i, product: p, lineTotal: p.sale * i.qty, lineOrigin: p.price * i.qty };
   });
   const origin = lines.reduce((s, l) => s + l.lineOrigin, 0);
   const subtotal = lines.reduce((s, l) => s + l.lineTotal, 0);
-  const shipping = subtotal === 0 || subtotal >= SHIPPING_FREE_OVER ? 0 : SHIPPING_FEE;
-  return { lines, origin, discount: origin - subtotal, subtotal, shipping, total: subtotal + shipping };
+  const coupon = Math.min(Math.max(0, couponDiscount), subtotal);
+  const shipping = subtotal === 0 || subtotal - coupon >= SHIPPING_FREE_OVER ? 0 : SHIPPING_FEE;
+  return { lines, origin, discount: origin - subtotal, coupon, subtotal, shipping, total: subtotal - coupon + shipping };
 }
 
 /* ---------- 상품 이미지 (SVG 일러스트) ---------- */
@@ -146,6 +148,8 @@ function renderHeader(active) {
     { key: "tops", label: "상의", href: "tops.html" },
     { key: "pants", label: "바지", href: "pants.html" },
     { key: "shoes", label: "신발", href: "shoes.html" },
+    { key: "notice", label: "공지", href: "notice.html" },
+    { key: "faq", label: "FAQ", href: "faq.html" },
   ];
   const el = document.getElementById("site-header");
   if (!el) return;
@@ -197,7 +201,7 @@ function renderFooter() {
   el.innerHTML = `
     <div class="inner footer-inner">
       <div class="footer-links">
-        <a href="#">회사소개</a><a href="#">이용약관</a><a href="#"><b>개인정보처리방침</b></a><a href="#">고객센터</a>
+        <a href="#">회사소개</a><a href="#">이용약관</a><a href="#"><b>개인정보처리방침</b></a><a href="notice.html">공지사항</a><a href="faq.html">FAQ</a>
       </div>
       <p>FITROOM (퍼블리싱 데모) · 이 사이트의 결제는 토스페이먼츠 <b>테스트 환경</b>에서만 처리되며 실제로 청구되지 않습니다.</p>
       <p class="copy">© FITROOM. All rights reserved.</p>
