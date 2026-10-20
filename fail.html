@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>결제 실패 | FITROOM</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body data-page="fail">
+  <header id="site-header"></header>
+
+  <main class="inner">
+    <div class="result" id="result"></div>
+  </main>
+
+  <footer id="site-footer"></footer>
+
+  <script src="js/data.js"></script>
+  <script src="js/common.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const pending = storeGet(sessionStorage, "fr_pending_order", null);
+      const back = pending && pending.mode === "buynow" ? "checkout.html?mode=buynow" : "checkout.html";
+      document.getElementById("result").innerHTML = `
+        <div class="result-icon fail">!</div>
+        <h1>결제에 실패했습니다</h1>
+        <p>${escapeHtml(qs("message") || "결제 처리 중 문제가 발생했습니다.")}</p>
+        <dl class="result-table">
+          <div><dt>에러 코드</dt><dd>${escapeHtml(qs("code") || "-")}</dd></div>
+          <div><dt>주문번호</dt><dd>${escapeHtml(qs("orderId") || "-")}</dd></div>
+        </dl>
+        <div class="result-actions"><a class="btn btn-line" href="index.html">홈으로</a><a class="btn btn-black" href="${back}">다시 결제하기</a></div>`;
+    });
+  </script>
+</body>
+</html>

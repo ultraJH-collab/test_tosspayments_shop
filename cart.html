@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>장바구니 | FITROOM</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body data-page="cart">
+  <header id="site-header"></header>
+
+  <main class="inner">
+    <h1 class="page-title">장바구니</h1>
+    <p class="steps"><span class="on">01 장바구니</span><span>›</span><span>02 주문/결제</span><span>›</span><span>03 주문완료</span></p>
+
+    <div id="cart-root"></div>
+  </main>
+
+  <footer id="site-footer"></footer>
+
+  <script src="js/data.js"></script>
+  <script src="js/common.js"></script>
+  <script>
+    function renderCart() {
+      const root = document.getElementById("cart-root");
+      const items = Cart.items();
+      if (!items.length) {
+        root.innerHTML = `<div class="empty box"><p>장바구니에 담긴 상품이 없습니다.</p><a class="btn btn-black" href="index.html">쇼핑 계속하기</a></div>`;
+        return;
+      }
+      const o = calcOrder(items);
+      root.innerHTML = `
+        <div class="order-layout">
+          <div class="box">
+            <div class="box-title">상품 ${o.lines.length}개 <button type="button" id="clear">전체 삭제</button></div>
+            ${o.lines.map((l, idx) => `
+              <div class="line-item">
+                <a class="li-img" href="product.html?id=${l.product.id}">${productImage(l.product)}</a>
+                <div>
+                  <p class="li-brand">${escapeHtml(l.product.brand)}</p>
+                  <a class="li-name" href="product.html?id=${l.product.id}">${escapeHtml(l.product.name)}</a>
+                  <p class="li-opt">옵션: ${l.size}</p>
+                  <div class="li-ctrl">
+                    <div class="qty">
+                      <button type="button" data-act="minus" data-idx="${idx}" aria-label="수량 감소">−</button>
+                      <input type="text" value="${l.qty}" readonly aria-label="수량" />
+                      <button type="button" data-act="plus" data-idx="${idx}" aria-label="수량 증가">+</button>
+                    </div>
+                    <button type="button" class="li-remove" data-act="remove" data-idx="${idx}">삭제</button>
+                  </div>
+                </div>
+                <div class="li-price">${l.lineOrigin !== l.lineTotal ? `<del>${won(l.lineOrigin)}</del>` : ""}<b>${won(l.lineTotal)}</b></div>
+              </div>`).join("")}
+          </div>
+          <aside class="summary">
+            <h3>결제 예정 금액</h3>
+            <div class="sum-row"><span>상품 금액</span><span>${won(o.origin)}</span></div>
+            <div class="sum-row disc"><span>할인 금액</span><span>-${won(o.discount)}</span></div>
+            <div class="sum-row"><span>배송비</span><span>${o.shipping ? won(o.shipping) : "무료"}</span></div>
+            <div class="sum-total"><span>합계</span><strong>${won(o.total)}</strong></div>
+            ${o.shipping ? `<p class="free-ship">${won(SHIPPING_FREE_OVER - o.subtotal)} 더 담으면 무료배송</p>` : ""}
+            <a class="btn btn-black" href="checkout.html">${won(o.total)} 주문하기</a>
+          </aside>
+        </div>`;
+    }
+
+    document.addEventListener("click", (e) => {
+      if (e.target.id === "clear") {
+        Cart.save([]);
+        return renderCart();
+      }
+      const b = e.target.closest("[data-act]");
+      if (!b) return;
+      const items = Cart.items();
+      const it = items[Number(b.dataset.idx)];
+      if (b.dataset.act === "plus") it.qty = Math.min(99, it.qty + 1);
+      if (b.dataset.act === "minus") it.qty = Math.max(1, it.qty - 1);
+      if (b.dataset.act === "remove") items.splice(Number(b.dataset.idx), 1);
+      Cart.save(items);
+      renderCart();
+    });
+
+    document.addEventListener("DOMContentLoaded", renderCart);
+  </script>
+</body>
+</html>

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>신발 | FITROOM</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body data-page="shoes">
+  <header id="site-header"></header>
+
+  <main class="inner">
+    <div class="list-head">
+      <p class="breadcrumb"><a href="index.html">홈</a> › <span id="cat-crumb"></span></p>
+      <h1 id="cat-title"></h1>
+      <div class="chips" id="chips"></div>
+    </div>
+    <div class="toolbar">
+      <p>상품 <b id="count">0</b>개</p>
+      <select id="sort" aria-label="정렬">
+        <option value="rec">추천순</option>
+        <option value="low">낮은 가격순</option>
+        <option value="high">높은 가격순</option>
+        <option value="rate">할인율순</option>
+        <option value="review">후기순</option>
+      </select>
+    </div>
+    <ul class="grid" id="grid"></ul>
+  </main>
+
+  <footer id="site-footer"></footer>
+
+  <script src="js/data.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/list.js"></script>
+</body>
+</html>

@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>주문/결제 | FITROOM</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <!-- 토스페이먼츠 SDK v2 -->
+  <script src="https://js.tosspayments.com/v2/standard"></script>
+</head>
+<body data-page="checkout">
+  <header id="site-header"></header>
+
+  <main class="inner">
+    <h1 class="page-title">주문/결제</h1>
+    <p class="steps"><span>01 장바구니</span><span>›</span><span class="on">02 주문/결제</span><span>›</span><span>03 주문완료</span></p>
+
+    <div class="test-banner">
+      <b>테스트 결제 환경</b> · 토스페이먼츠 테스트 키로 동작하며 실제 돈이 빠져나가지 않습니다.
+    </div>
+
+    <div id="checkout-root"></div>
+  </main>
+
+  <footer id="site-footer"></footer>
+
+  <script src="js/data.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/checkout.js"></script>
+</body>
+</html>

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FITROOM - 패션 스토어</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body data-page="home">
+  <header id="site-header"></header>
+
+  <main>
+    <section class="hero" id="hero"></section>
+
+    <div class="inner">
+      <nav class="cat-shortcut">
+        <a href="tops.html">상의 <span>TOPS</span></a>
+        <a href="pants.html">바지 <span>PANTS</span></a>
+        <a href="shoes.html">신발 <span>SHOES</span></a>
+      </nav>
+
+      <div id="home-sections"></div>
+    </div>
+  </main>
+
+  <footer id="site-footer"></footer>
+
+  <script src="js/data.js"></script>
+  <script src="js/common.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const heroes = [
+        { id: "t03", small: "COVERSTUDIO 단독", title: "가을 아우터<br>최대 30% 할인" },
+        { id: "p01", small: "DENIMLAB 신상", title: "와이드 데님<br>컬렉션" },
+        { id: "s01", small: "STRIDE 랭킹 1위", title: "매일 신는<br>화이트 스니커즈" },
+      ];
+      document.getElementById("hero").innerHTML = heroes
+        .map((h) => {
+          const p = findProduct(h.id);
+          return `<a class="hero-slide" href="product.html?id=${p.id}">${productImage(p, 1)}
+            <div class="hero-copy"><small>${h.small}</small><strong>${h.title}</strong></div></a>`;
+        })
+        .join("");
+
+      document.getElementById("home-sections").innerHTML = Object.entries(CATEGORIES)
+        .map(([key, c]) => {
+          const top = PRODUCTS.filter((p) => p.cat === key).sort((a, b) => b.likes - a.likes).slice(0, 4);
+          return `<section class="section">
+            <div class="section-head"><h2>${c.name} 랭킹</h2><a href="${c.page}">전체보기 ›</a></div>
+            <ul class="grid">${top.map((p, i) => productCard(p, i + 1)).join("")}</ul>
+          </section>`;
+        })
+        .join("");
+    });
+  </script>
+</body>
+</html>

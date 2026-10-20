@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>주문 완료 | FITROOM</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body data-page="success">
+  <header id="site-header"></header>
+
+  <main class="inner">
+    <div class="result" id="result"></div>
+  </main>
+
+  <footer id="site-footer"></footer>
+
+  <script src="js/data.js"></script>
+  <script src="js/common.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const el = document.getElementById("result");
+      const paymentKey = qs("paymentKey");
+      const orderId = qs("orderId");
+      const amount = Number(qs("amount"));
+      const pending = storeGet(sessionStorage, "fr_pending_order", null);
+
+      // 금액 위변조 확인: 결제 요청 때 저장한 주문과 리다이렉트 파라미터 비교
+      if (!paymentKey || !orderId || !pending || pending.orderId !== orderId || pending.amount !== amount) {
+        el.innerHTML = `
+          <div class="result-icon fail">!</div>
+          <h1>결제 정보를 확인할 수 없습니다</h1>
+          <p>주문 정보가 없거나 결제 금액이 일치하지 않습니다.</p>
+          <div class="result-actions"><a class="btn btn-line" href="cart.html">장바구니</a><a class="btn btn-black" href="index.html">홈으로</a></div>`;
+        return;
+      }
+
+      if (pending.mode === "cart") Cart.save([]);
+      try { sessionStorage.removeItem("fr_buynow"); } catch (e) {}
+
+      el.innerHTML = `
+        <div class="result-icon">✓</div>
+        <h1>주문이 완료되었습니다</h1>
+        <p>토스페이먼츠 테스트 결제가 정상적으로 처리되었습니다.</p>
+        <dl class="result-table">
+          <div><dt>주문번호</dt><dd>${escapeHtml(orderId)}</dd></div>
+          <div><dt>주문상품</dt><dd>${escapeHtml(pending.orderName)}</dd></div>
+          <div><dt>결제금액</dt><dd>${won(amount)}</dd></div>
+          <div><dt>paymentKey</dt><dd>${escapeHtml(paymentKey)}</dd></div>
+        </dl>
+        <div class="result-actions"><a class="btn btn-line" href="index.html">쇼핑 계속하기</a><a class="btn btn-black" href="#">주문내역 보기</a></div>
+        <p class="dev-note">
+          <b>개발 참고</b> · 토스페이먼츠는 이 페이지로 돌아온 뒤 <b>10분 안에 결제 승인 API</b>(<code>POST /v1/payments/confirm</code>)를
+          호출해야 결제가 최종 완료됩니다. 승인 API는 시크릿 키가 필요하므로 반드시 서버에서 호출하세요.
+          (퍼블리싱 단계라 서버 승인은 포함되어 있지 않습니다.)
+        </p>`;
+    });
+  </script>
+</body>
+</html>
