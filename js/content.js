@@ -8,6 +8,10 @@ onReady(async () => {
   const { data, error } = sb ? await query : { data: [] };
   if (error) return (root.innerHTML = `<p class="pay-error">${escapeHtml(error.message)}</p>`);
   if (!data.length) return (root.innerHTML = `<p class="muted">등록된 ${isNotice ? "공지사항" : "질문"}이 없습니다.</p>`);
+  if (!isNotice) {
+    // AEO: 질문-답변 쌍을 FAQPage 구조화 데이터로도 제공한다.
+    SEO.jsonLd("faq", { "@context": "https://schema.org", "@type": "FAQPage", mainEntity: data.map((r) => ({ "@type": "Question", name: r.question, acceptedAnswer: { "@type": "Answer", text: r.answer } })) });
+  }
   root.innerHTML = data
     .map((r) =>
       isNotice

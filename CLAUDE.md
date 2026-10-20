@@ -67,6 +67,12 @@ powershell -ExecutionPolicy Bypass -File serve.ps1 -Port 9000
 - `product_questions`(비밀글 RLS, 답변은 관리자만 `answer` 컬럼 update), `banners`(노출 기간 RLS, Storage `banners`), `notices`, `faqs`. 페이지: `notice.html`, `faq.html`(`js/content.js`), 홈 배너, 상품 상세 Q&A.
 - `audit_logs`: `audit_row()` 트리거로만 기록, 관리자 조회 전용. `admin_dashboard(from,to,unit)` RPC가 대시보드 집계. 관리자 탭: Q&A / 쿠폰 / 배너·공지·FAQ / 매출 대시보드 / 감사 로그, 상품·회원·주문 CSV 내보내기(`downloadCsv`), 주문 일괄 다음 단계.
 
+### SEO / AEO / GEO
+- `js/seo.js`(common.js 다음에 로드, 모든 페이지): canonical·og:url·og:site_name 자동 설정, 홈 Organization+WebSite(SearchAction) JSON-LD, 카테고리 CollectionPage+ItemList, 상품 상세 Product(가격·재고·실제 후기 기반 AggregateRating/Review)+BreadcrumbList+답변된 공개 Q&A의 FAQPage(`SEO.product`, product.js가 후기/Q&A 로드 후 갱신). `faq.html`은 content.js가 FAQPage JSON-LD 생성. 정적 description/OG/robots 메타는 각 HTML `<head>`에 있다(새 페이지도 추가).
+- 비공개 페이지(cart/checkout/success/fail/login/mypage/admin/reset-password)는 `noindex,nofollow`, search는 `noindex,follow`.
+- `robots.txt`(주요 AI 크롤러 허용), `sitemap.xml`(고정 페이지+상품 24개, **상품을 추가/삭제하면 직접 갱신**), `llms.txt`. 이 세 파일의 절대 주소는 GitHub Pages 주소(`https://ultrajh-collab.github.io/test_tosspayments_shop`)를 가정한 값이며, 도메인이 다르면 바꾼다. 프로젝트 하위 경로 배포에서는 robots.txt가 도메인 루트에 있어야 적용된다.
+- 한계: 상품/목록은 JS로 렌더링되므로 JS를 실행하지 않는 크롤러는 정적 HTML(메타, 홈 h1/noscript)만 본다.
+
 ### 이미지 / 배송 / 알림
 - `productImage(p, variant)`: `p.images[variant]`(db.js가 `product_images`에서 로드)가 있으면 `<img>`(Storage 공개 URL, 변환은 Pro 플랜 기능이라 원본 사용), 없으면 SVG 폴백. 관리자 상품 폼에서 업로드/순서/삭제(Storage RLS는 관리자만).
 - 마이페이지 주문 카드에 결제완료→배송중→배송완료 타임라인과 운송장 링크(`COURIERS`/`trackingUrl`, db.js). 관리자 주문 탭은 Realtime(`orders`)으로 갱신·토스트.

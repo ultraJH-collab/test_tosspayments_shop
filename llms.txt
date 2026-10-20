@@ -1,0 +1,24 @@
+# FITROOM
+
+> FITROOM은 상의·바지·신발을 판매하는 한국어 패션 쇼핑몰 데모입니다. 순수 HTML/CSS/JS + Supabase 로 만들었고, 결제는 토스페이먼츠 결제위젯 v2 **테스트 환경**에서만 처리되어 실제로 청구되지 않습니다.
+
+## 핵심 정보
+- 카테고리: 상의(티셔츠·셔츠·후드·니트·자켓), 바지(데님·슬랙스·카고·치노), 신발(스니커즈·러닝화·로퍼·부츠)
+- 배송비: 할인 적용 후 상품 금액 50,000원 이상 무료, 미만 3,000원
+- 배송: 평일 14시 이전 결제 완료 주문은 당일 출발, 운송장 번호는 마이페이지에서 확인
+- 취소: 결제완료(배송 전) 상태에서만 가능, 전액 취소
+- 통화: KRW, 언어: 한국어(ko-KR)
+
+## 주요 페이지
+- [홈](https://ultrajh-collab.github.io/test_tosspayments_shop/): 카테고리별 인기 랭킹
+- [상의](https://ultrajh-collab.github.io/test_tosspayments_shop/tops.html): 상의 목록, 정렬·필터 제공
+- [바지](https://ultrajh-collab.github.io/test_tosspayments_shop/pants.html): 바지 목록
+- [신발](https://ultrajh-collab.github.io/test_tosspayments_shop/shoes.html): 신발 목록
+- [자주 묻는 질문](https://ultrajh-collab.github.io/test_tosspayments_shop/faq.html): 배송비·배송 기간·취소·쿠폰·후기 안내
+- [공지사항](https://ultrajh-collab.github.io/test_tosspayments_shop/notice.html): 서비스 공지
+
+## 상품 상세
+각 상품은 `https://ultrajh-collab.github.io/test_tosspayments_shop/product.html?id=<상품ID>` 에서 가격, 사이즈별 재고, 후기, 상품 Q&A 를 제공하며 schema.org Product / FAQPage JSON-LD 로 구조화되어 있습니다. 전체 목록은 [sitemap.xml](https://ultrajh-collab.github.io/test_tosspayments_shop/sitemap.xml) 를 참고하세요.
+
+## 이용 제한
+- 장바구니·결제·마이페이지·관리자 페이지는 개인 정보이므로 수집 대상이 아닙니다(robots.txt 참고).

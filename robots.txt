@@ -1,0 +1,30 @@
+# FITROOM — 검색엔진과 AI 크롤러(GEO)에 공개 페이지를 허용하고, 개인/결제/관리 페이지는 제외한다.
+User-agent: *
+Allow: /
+Disallow: /cart.html
+Disallow: /checkout.html
+Disallow: /success.html
+Disallow: /fail.html
+Disallow: /login.html
+Disallow: /mypage.html
+Disallow: /admin.html
+Disallow: /reset-password.html
+Disallow: /search.html
+
+# 생성형 AI 검색·답변 크롤러 명시 허용
+User-agent: GPTBot
+Allow: /
+User-agent: OAI-SearchBot
+Allow: /
+User-agent: ChatGPT-User
+Allow: /
+User-agent: ClaudeBot
+Allow: /
+User-agent: Claude-SearchBot
+Allow: /
+User-agent: PerplexityBot
+Allow: /
+User-agent: Google-Extended
+Allow: /
+
+Sitemap: https://ultrajh-collab.github.io/test_tosspayments_shop/sitemap.xml

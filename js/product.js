@@ -8,7 +8,7 @@ onReady(() => {
   const cat = CATEGORIES[p.cat];
   document.body.dataset.page = p.cat;
   renderHeader(p.cat);
-  document.title = `${p.brand} ${p.name} | FITROOM`;
+  SEO.product(p); // 제목·설명·Product JSON-LD(후기/Q&A는 로드 후 다시 반영)
 
   const $ = (id) => document.getElementById(id);
   const state = { size: null, qty: 1, view: 0 };
@@ -113,6 +113,8 @@ onReady(() => {
   /* 후기: 구매확정(delivered) 주문의 리뷰만 존재한다. 숨김 처리된 리뷰는 RLS로 일반 사용자에게 보이지 않는다. */
   const reviewImg = (path) => `${SUPABASE_URL}/storage/v1/object/public/review-images/${path.split("/").map(encodeURIComponent).join("/")}`;
   const rvState = { sort: "new", list: [] };
+  let qnaRows = [];
+  const seoRefresh = () => SEO.product(p, { reviews: rvState.list.filter((r) => !r.is_hidden), qna: qnaRows });
   function renderReviews() {
     const list = rvState.list.slice().sort(rvState.sort === "rating" ? (a, b) => b.rating - a.rating || new Date(b.created_at) - new Date(a.created_at) : (a, b) => new Date(b.created_at) - new Date(a.created_at));
     const n = rvState.list.length;
@@ -139,6 +141,7 @@ onReady(() => {
     if (error) return ($("reviews").innerHTML = `<p class="muted">${escapeHtml(error.message)}</p>`);
     rvState.list = data;
     renderReviews();
+    seoRefresh();
   });
 
   /* 상품 Q&A: 비밀글은 작성자/관리자에게만 조회된다(RLS). 수정 불가·삭제만 가능. */
@@ -146,6 +149,8 @@ onReady(() => {
     const { data, error } = sb ? await sb.from("product_questions").select("*").eq("product_id", p.id).order("created_at", { ascending: false }) : { data: [] };
     if (error) return ($("qna").innerHTML = `<p class="muted">${escapeHtml(error.message)}</p>`);
     $("qna-count").textContent = num(data.length);
+    qnaRows = data;
+    seoRefresh();
     $("qna").innerHTML = data.length
       ? data.map((q) => `<div class="qna"><div class="q-top"><span>${q.answered_at ? "답변완료" : "답변대기"}</span><span>${escapeHtml(q.author)}</span><span>${new Date(q.created_at).toLocaleDateString("ko-KR")}</span>${q.is_secret ? '<span class="pill">비밀글</span>' : ""}${Auth.user && (q.user_id === Auth.user.id || Auth.isAdmin) ? `<button type="button" class="link-btn" data-qdel="${q.id}">삭제</button>` : ""}</div><p>${escapeHtml(q.body)}</p>${q.answer ? `<div class="q-answer"><b>판매자 답변</b><br>${escapeHtml(q.answer)}</div>` : ""}</div>`).join("")
       : `<p class="muted">등록된 문의가 없습니다.</p>`;

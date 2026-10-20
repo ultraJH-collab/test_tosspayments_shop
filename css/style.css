@@ -406,3 +406,5 @@ table.size-table { width: 100%; border-collapse: collapse; font-size: 13px; text
 .dash-bar { display: inline-block; height: 10px; background: #000; vertical-align: middle; }
 .admin-sub { font-size: 15px; font-weight: 800; margin: 24px 0 8px; }
 .admin-tabs { flex-wrap: wrap; }
+
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }

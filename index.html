@@ -3,15 +3,22 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>FITROOM - 패션 스토어</title>
+  <title>FITROOM | 상의·바지·신발 패션 스토어</title>
+  <meta name="description" content="FITROOM — 상의·바지·신발을 한곳에서. 카테고리별 인기 랭킹과 신상품, 5만원 이상 무료배송. 토스페이먼츠 테스트 결제 환경의 패션 쇼핑몰 데모입니다." />
+  <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="FITROOM | 상의·바지·신발 패션 스토어" />
+  <meta property="og:description" content="FITROOM — 상의·바지·신발을 한곳에서. 카테고리별 인기 랭킹과 신상품, 5만원 이상 무료배송. 토스페이먼츠 테스트 결제 환경의 패션 쇼핑몰 데모입니다." />
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body data-page="home">
   <header id="site-header"></header>
 
   <main>
+    <h1 class="sr-only">FITROOM 패션 스토어 — 상의, 바지, 신발</h1>
     <div class="inner"><div class="banners" id="banners" hidden></div></div>
     <section class="hero" id="hero"></section>
+    <noscript><p class="inner">FITROOM은 상의·바지·신발을 판매하는 패션 스토어입니다. <a href="tops.html">상의</a> · <a href="pants.html">바지</a> · <a href="shoes.html">신발</a> · <a href="faq.html">FAQ</a> · <a href="notice.html">공지</a></p></noscript>
 
     <div class="inner">
       <nav class="cat-shortcut">
@@ -30,6 +37,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
   <script src="js/db.js"></script>
   <script src="js/common.js"></script>
+  <script src="js/seo.js"></script>
   <script>
     onReady(() => {
       const heroes = [
