@@ -363,3 +363,22 @@ table.size-table { width: 100%; border-collapse: collapse; font-size: 13px; text
 .timeline { display: flex; list-style: none; margin: 12px 0; padding: 0; gap: 8px; }
 .timeline li { flex: 1; padding-top: 8px; border-top: 3px solid #ddd; color: #999; font-size: 12px; display: flex; flex-direction: column; }
 .timeline li.on { border-top-color: var(--blue); color: #000; }
+.card-thumb .wish-btn { position: absolute; right: 8px; top: 8px; width: 32px; height: 32px; border: 0; border-radius: 50%; background: rgba(255,255,255,.85); color: #bbb; font-size: 16px; cursor: pointer; z-index: 2; }
+.card-thumb .wish-btn.on { color: #ff3b30; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: -8px 0 16px; font-size: 13px; }
+.filters select { height: 34px; padding: 0 10px; border: 1px solid var(--line); background: #fff; }
+.rv-summary { display: flex; gap: 32px; align-items: center; margin: 12px 0 20px; }
+.rv-summary .avg { font-size: 36px; font-weight: 800; }
+.rv-bars { flex: 1; max-width: 320px; font-size: 12px; }
+.rv-bars div { display: flex; align-items: center; gap: 8px; margin: 2px 0; }
+.rv-bars i { flex: 1; height: 6px; background: #eee; display: block; position: relative; }
+.rv-bars i b { position: absolute; left: 0; top: 0; bottom: 0; background: #000; }
+.review .r-imgs { display: flex; gap: 6px; margin-top: 8px; }
+.review .r-imgs img { width: 72px; height: 72px; object-fit: cover; }
+.my-tabs { display: flex; gap: 4px; margin: 0 0 20px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.my-tabs button { padding: 10px 16px; border: 0; background: none; font-size: 14px; cursor: pointer; border-bottom: 2px solid transparent; }
+.my-tabs button.on { font-weight: 800; border-bottom-color: #000; }
+.addr-card { display: flex; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.addr-card .pill { margin-left: 6px; }
+.danger { color: var(--red); }
+.link-btn { background: none; border: 0; color: #666; text-decoration: underline; cursor: pointer; font-size: 13px; padding: 4px 0; }

@@ -85,6 +85,36 @@ onReady(async () => {
     document.getElementById("c-email").value = Auth.user.email || "";
   }
 
+  // 저장된 배송지 선택 / 새 배송지 저장
+  let addresses = [];
+  if (Auth.user) {
+    const { data } = await sb.from("addresses").select("*").order("is_default", { ascending: false }).order("id");
+    addresses = data || [];
+    const grid = document.querySelector("#checkout-root .form-grid");
+    grid.insertAdjacentHTML(
+      "afterbegin",
+      `<label for="c-addr-pick">배송지</label>
+       <select id="c-addr-pick"><option value="">직접 입력</option>${addresses.map((a) => `<option value="${a.id}">${escapeHtml(a.label || a.recipient)}${a.is_default ? " (기본)" : ""} · ${escapeHtml(a.addr1)}</option>`).join("")}</select>`
+    );
+    grid.insertAdjacentHTML("beforeend", `<span></span><label class="check"><input type="checkbox" id="c-save-addr" /> 이 배송지를 저장</label>`);
+    const fill = (a) => {
+      document.getElementById("c-name").value = a.recipient;
+      document.getElementById("c-phone").value = a.phone;
+      document.getElementById("c-zip").value = a.zip;
+      document.getElementById("c-addr1").value = a.addr1;
+      document.getElementById("c-addr2").value = a.addr2;
+    };
+    document.getElementById("c-addr-pick").addEventListener("change", (e) => {
+      const a = addresses.find((x) => String(x.id) === e.target.value);
+      if (a) fill(a);
+    });
+    const def = addresses.find((a) => a.is_default);
+    if (def) {
+      fill(def);
+      document.getElementById("c-addr-pick").value = def.id;
+    }
+  }
+
   document.getElementById("btn-zip").onclick = () => {
     document.getElementById("c-zip").value = "06236";
     document.getElementById("c-addr1").value = "서울특별시 강남구 테헤란로 000 (예시 주소)";
@@ -166,6 +196,14 @@ onReady(async () => {
       return showError("상품 가격이 변경되었습니다. 페이지를 새로고침한 뒤 다시 결제해 주세요.");
     }
     const orderId = order.order_id;
+    // 새 배송지 저장(실패해도 결제는 계속 진행). 주문에는 위 값이 스냅샷으로 저장된다.
+    const saveBox = document.getElementById("c-save-addr");
+    if (Auth.user && saveBox && saveBox.checked && document.getElementById("c-addr1").value) {
+      await sb.from("addresses").insert({
+        user_id: Auth.user.id, recipient: name, phone, zip: document.getElementById("c-zip").value,
+        addr1: document.getElementById("c-addr1").value, addr2: document.getElementById("c-addr2").value.trim(),
+      });
+    }
 
     // 결제 성공 후 금액 위변조 확인용으로 주문 정보를 보관합니다.
     storeSet(sessionStorage, "fr_pending_order", {

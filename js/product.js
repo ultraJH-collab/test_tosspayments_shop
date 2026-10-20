@@ -65,9 +65,13 @@ onReady(() => {
   $("qty").addEventListener("change", (e) => setQty(e.target.value));
   setQty(1);
 
-  $("btn-like").onclick = (e) => {
-    e.currentTarget.classList.toggle("on");
-    toast(e.currentTarget.classList.contains("on") ? "좋아요 목록에 추가했어요." : "좋아요를 취소했어요.");
+  $("btn-like").classList.toggle("on", Wish.has(p.id));
+  $("btn-like").onclick = async (e) => {
+    const btn = e.currentTarget;
+    const on = await Wish.toggle(p.id);
+    if (on === null) return;
+    btn.classList.toggle("on", on);
+    toast(on ? "찜 목록에 추가했어요." : "찜을 취소했어요.");
   };
 
   function requireSize() {
@@ -106,16 +110,36 @@ onReady(() => {
       .join("") +
     `</tbody>`;
 
-  /* 후기 */
-  const reviews = [
-    { r: 5, who: "fit***", size: p.sizes[1] || p.sizes[0], text: "핏이 정말 예쁘고 소재도 좋아요. 재구매 의사 있습니다." },
-    { r: 5, who: "mu0***", size: p.sizes[2] || p.sizes[0], text: "사진이랑 색감 똑같아요. 배송도 빨랐습니다." },
-    { r: 4, who: "day***", size: p.sizes[0], text: "생각보다 살짝 크게 나온 편이에요. 반 사이즈 작게 추천합니다." },
-  ];
-  $("review-count").textContent = num(p.reviews);
-  $("reviews").innerHTML = reviews
-    .map((v) => `<div class="review"><div class="r-top"><span class="star">${"★".repeat(v.r)}${"☆".repeat(5 - v.r)}</span><span>${v.who}</span><span>구매옵션: ${escapeHtml(v.size)}</span></div><p>${v.text}</p></div>`)
-    .join("");
+  /* 후기: 구매확정(delivered) 주문의 리뷰만 존재한다. 숨김 처리된 리뷰는 RLS로 일반 사용자에게 보이지 않는다. */
+  const reviewImg = (path) => `${SUPABASE_URL}/storage/v1/object/public/review-images/${path.split("/").map(encodeURIComponent).join("/")}`;
+  const rvState = { sort: "new", list: [] };
+  function renderReviews() {
+    const list = rvState.list.slice().sort(rvState.sort === "rating" ? (a, b) => b.rating - a.rating || new Date(b.created_at) - new Date(a.created_at) : (a, b) => new Date(b.created_at) - new Date(a.created_at));
+    const n = rvState.list.length;
+    const avg = n ? rvState.list.reduce((s, r) => s + r.rating, 0) / n : 0;
+    $("review-count").textContent = num(n);
+    $("pd-review").innerHTML = `<span class="star">★</span> <b>${n ? avg.toFixed(1) : "-"}</b> · 후기 ${num(n)}개 · <span style="color:#ff0000">♥</span> ${compact(p.likes)}`;
+    if (!n) return ($("reviews").innerHTML = `<p class="muted">아직 후기가 없습니다. 상품을 받으신 뒤 마이페이지 주문내역에서 후기를 작성할 수 있어요.</p>`);
+    const dist = [5, 4, 3, 2, 1].map((s) => [s, rvState.list.filter((r) => r.rating === s).length]);
+    $("reviews").innerHTML =
+      `<div class="rv-summary"><div><div class="avg">${avg.toFixed(1)}</div><span class="star">${"★".repeat(Math.round(avg))}</span></div>
+        <div class="rv-bars">${dist.map(([s, c]) => `<div><span>${s}점</span><i><b style="width:${(c / n) * 100}%"></b></i><span>${c}</span></div>`).join("")}</div>
+        <select id="rv-sort" aria-label="후기 정렬"><option value="new" ${rvState.sort === "new" ? "selected" : ""}>최신순</option><option value="rating" ${rvState.sort === "rating" ? "selected" : ""}>별점순</option></select></div>` +
+      list.map((v) => `<div class="review"><div class="r-top"><span class="star">${"★".repeat(v.rating)}${"☆".repeat(5 - v.rating)}</span><span>${escapeHtml(v.author)}</span><span>${new Date(v.created_at).toLocaleDateString("ko-KR")}</span>${v.is_hidden ? "<span class='pill'>숨김(나에게만 보임)</span>" : ""}</div><p>${escapeHtml(v.body)}</p>${
+        v.image_paths.length ? `<div class="r-imgs">${v.image_paths.map((x) => `<img src="${escapeHtml(reviewImg(x))}" alt="후기 사진" loading="lazy" />`).join("")}</div>` : ""
+      }</div>`).join("");
+  }
+  document.addEventListener("change", (e) => {
+    if (e.target.id !== "rv-sort") return;
+    rvState.sort = e.target.value;
+    renderReviews();
+  });
+  $("reviews").innerHTML = `<p class="muted">후기를 불러오는 중...</p>`;
+  (sb ? sb.from("reviews").select("*").eq("product_id", p.id).order("created_at", { ascending: false }) : Promise.resolve({ data: [] })).then(({ data, error }) => {
+    if (error) return ($("reviews").innerHTML = `<p class="muted">${escapeHtml(error.message)}</p>`);
+    rvState.list = data;
+    renderReviews();
+  });
 
   /* 추천 */
   $("related").innerHTML = PRODUCTS.filter((x) => x.cat === p.cat && x.id !== p.id)

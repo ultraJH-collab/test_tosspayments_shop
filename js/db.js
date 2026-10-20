@@ -56,6 +56,8 @@ async function loadSession() {
 
 async function signOut() {
   await sb.auth.signOut();
+  // 공용 PC에서 다음 사람에게 장바구니가 보이지 않도록 로컬 캐시를 비운다(서버 장바구니는 유지).
+  try { localStorage.removeItem("fr_cart"); sessionStorage.removeItem("fr_cart_merged"); } catch (e) {}
   location.href = "index.html";
 }
 
@@ -92,6 +94,37 @@ function isSoldOut(p) {
   return !!p.stock && p.sizes.every((s) => stockOf(p, s) <= 0);
 }
 
+/* ---------- 찜(위시리스트) ---------- */
+const Wish = {
+  ids: new Set(),
+  has(id) {
+    return this.ids.has(id);
+  },
+  async load() {
+    this.ids = new Set();
+    if (!Auth.user) return;
+    const { data } = await sb.from("wishlists").select("product_id");
+    (data || []).forEach((r) => this.ids.add(r.product_id));
+  },
+  // 비회원은 로그인 화면으로 보낸다. 성공 시 새 찜 상태(true/false)를 돌려준다.
+  async toggle(id) {
+    if (!Auth.user) {
+      location.href = loginUrl();
+      return null;
+    }
+    const on = !this.has(id);
+    const { error } = on
+      ? await sb.from("wishlists").insert({ user_id: Auth.user.id, product_id: id })
+      : await sb.from("wishlists").delete().eq("product_id", id);
+    if (error) {
+      toast(error.message);
+      return this.has(id);
+    }
+    on ? this.ids.add(id) : this.ids.delete(id);
+    return on;
+  },
+};
+
 /* ---------- 앱 초기화 ---------- */
 const App = {
   online: !!sb,
@@ -108,7 +141,7 @@ const App = {
       console.error("세션 확인 실패", e);
     }
     try {
-      await loadProducts();
+      await Promise.all([loadProducts(), Wish.load()]);
     } catch (e) {
       console.error("상품 데이터를 불러오지 못했습니다.", e);
       App.online = false;

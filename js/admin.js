@@ -12,10 +12,10 @@ onReady(() => {
   const fmtDate = (s) => new Date(s).toLocaleDateString("ko-KR");
   const fmtDateTime = (s) => new Date(s).toLocaleString("ko-KR", { dateStyle: "short", timeStyle: "short" });
   const includes = (q, ...fields) => !q || fields.some((f) => String(f || "").toLowerCase().includes(q));
-  const state = { products: [], members: [], orders: [], loaded: {} };
+  const state = { products: [], members: [], orders: [], reviews: [], loaded: {} };
 
   /* ---------- 탭 ---------- */
-  const loaders = { products: loadProducts, members: loadMembers, orders: loadOrders };
+  const loaders = { products: loadProducts, members: loadMembers, orders: loadOrders, reviews: loadReviews };
   function showTab(tab) {
     document.querySelectorAll("#admin-tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === tab));
     document.querySelectorAll(".admin-panel").forEach((p) => p.classList.toggle("hidden", p.id !== "tab-" + tab));
@@ -445,6 +445,50 @@ onReady(() => {
       return loadOrders();
     }
     renderOrders();
+  });
+
+  /* ---------- 후기 관리(숨김/삭제) ---------- */
+  async function loadReviews() {
+    $("r-rows").innerHTML = `<tr><td colspan="6" class="muted">불러오는 중...</td></tr>`;
+    const { data, error } = await sb.from("reviews").select("*").order("created_at", { ascending: false }).limit(500);
+    if (error) return ($("r-rows").innerHTML = `<tr><td colspan="6" class="pay-error">${escapeHtml(error.message)}</td></tr>`);
+    state.reviews = data;
+    renderReviews();
+  }
+  function renderReviews() {
+    const q = $("r-search").value.trim().toLowerCase();
+    const h = $("r-hidden").value;
+    const list = state.reviews.filter((r) => includes(q, r.product_id, r.body, r.author) && (h === "" || String(r.is_hidden ? 1 : 0) === h));
+    $("r-count").textContent = `${num(list.length)}건`;
+    $("r-rows").innerHTML = list.length
+      ? list.map((r) => `<tr class="${r.is_hidden ? "row-off" : ""}">
+          <td class="nowrap">${fmtDate(r.created_at)}</td>
+          <td class="mono">${escapeHtml(r.product_id)}</td>
+          <td>${escapeHtml(r.author)}</td>
+          <td>${"★".repeat(r.rating)}</td>
+          <td>${escapeHtml(r.body)}${r.image_paths.length ? ` <small class="muted">(사진 ${r.image_paths.length})</small>` : ""}</td>
+          <td><button type="button" class="btn-cancel-order" data-rv-hide="${r.id}">${r.is_hidden ? "노출" : "숨김"}</button> <button type="button" class="btn-cancel-order" data-rv-del="${r.id}">삭제</button></td>
+        </tr>`).join("")
+      : `<tr><td colspan="6" class="muted">후기가 없습니다.</td></tr>`;
+  }
+  ["r-search", "r-hidden"].forEach((id) => $(id).addEventListener("input", renderReviews));
+  $("r-rows").addEventListener("click", async (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    const id = Number(b.dataset.rvHide || b.dataset.rvDel);
+    const r = state.reviews.find((x) => x.id === id);
+    if (b.dataset.rvDel) {
+      if (!confirm("이 후기를 삭제할까요? 되돌릴 수 없습니다.")) return;
+      const { error } = await sb.from("reviews").delete().eq("id", id);
+      if (error) return toast(error.message);
+      if (r.image_paths.length) sb.storage.from("review-images").remove(r.image_paths);
+      state.reviews = state.reviews.filter((x) => x.id !== id);
+    } else {
+      const { data, error } = await sb.from("reviews").update({ is_hidden: !r.is_hidden }).eq("id", id).select().single();
+      if (error) return toast(error.message);
+      Object.assign(r, data);
+    }
+    renderReviews();
   });
 
   /* 주문 변경 실시간 반영(Realtime). 구독도 RLS를 따르므로 관리자만 타인 주문을 받는다. */

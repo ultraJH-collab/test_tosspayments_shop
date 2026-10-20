@@ -15,7 +15,23 @@
       <button type="button" data-tab="products" class="on">상품 관리</button>
       <button type="button" data-tab="members">회원 관리</button>
       <button type="button" data-tab="orders">주문 관리</button>
+      <button type="button" data-tab="reviews">후기 관리</button>
     </nav>
+
+    <!-- 후기 관리 -->
+    <section class="admin-panel hidden" id="tab-reviews">
+      <div class="admin-toolbar">
+        <input type="search" id="r-search" placeholder="상품 ID, 내용 검색" />
+        <select id="r-hidden"><option value="">전체</option><option value="1">숨김</option><option value="0">노출</option></select>
+        <span class="admin-count" id="r-count"></span>
+      </div>
+      <div class="table-wrap">
+        <table class="admin-table">
+          <thead><tr><th>작성일</th><th>상품</th><th>작성자</th><th>별점</th><th>내용</th><th>관리</th></tr></thead>
+          <tbody id="r-rows"></tbody>
+        </table>
+      </div>
+    </section>
 
     <!-- 상품 관리 -->
     <section class="admin-panel" id="tab-products">

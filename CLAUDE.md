@@ -39,7 +39,7 @@ powershell -ExecutionPolicy Bypass -File serve.ps1 -Port 9000
 ### Supabase
 - 프로젝트: `fitroom-shop` (ref `fnzrwjiiwcstilaxiish`, ap-northeast-2). `js/db.js`에는 **publishable 키만** 둔다. 권한은 전부 RLS로 강제하며, 화면 단 관리자 체크는 UX용이다.
 - 스키마 기록: `supabase/migrations/*.sql` (Supabase MCP `apply_migration`으로 적용한 것과 동일). 스키마를 바꾸면 새 번호 파일을 추가하고 같은 내용을 적용한다.
-- 테이블: `product_stock`(사이즈별 재고), `order_events`(주문 상태 이력), `product_images`(Storage `product-images` 경로, 정렬순), `profiles`(auth.users 가입 시 트리거로 생성, `role` user/admin, `status` active/blocked), `products`, `orders`, `order_items`(주문 당시 상품 스냅샷, products FK 없음).
+- 테이블: `product_stock`(사이즈별 재고), `order_events`(주문 상태 이력), `product_images`(Storage `product-images` 경로, 정렬순), `wishlists`·`cart_items`·`addresses`(본인만, RLS), `reviews`(delivered 주문 항목당 1회·숨김은 관리자), `profiles`(auth.users 가입 시 트리거로 생성, `role` user/admin, `status` active/blocked), `products`, `orders`, `order_items`(주문 당시 상품 스냅샷, products FK 없음).
 - `is_admin()`이 RLS의 기준. 일반 회원은 자기 `role`/`status`를 바꿀 수 없고(트리거 `protect_profile_fields`), 관리자는 자기 권한을 내릴 수 없다. SQL 편집기(auth.uid() 없음)에서는 자유롭게 바꿀 수 있다.
 - 주문은 클라이언트가 insert하지 않고 RPC로만 만든다: `create_order(p_items, p_customer)`가 DB 상품가로 금액·배송비·주문명을 계산해 `pending` 주문을 만들고 `{order_id, order_name, amount}`를 돌려준다 → `success.html`이 Edge Function `confirm-payment`를 호출(토스 승인 API → 서비스 롤로 `mark_order_paid`, 일반 사용자 호출 불가), 실패/위젯 닫힘은 `mark_order_failed(order_id, reason)`. `create_order`는 `product_stock`을 조건부 UPDATE로 차감(재고 부족 시 예외)하고, 재고 복구·`order_events` 기록·상태 전이 검증은 `orders_status_guard` 트리거가 맡는다(클라이언트 직접 변경은 관리자의 paid→shipping→delivered만 허용하며 이 검사는 security **invoker** 트리거 `orders_transition_guard`가 한다 — definer 트리거 안에서는 `current_user`가 소유자라 역할 검사가 불가능하다. 배송중 전환엔 `courier`/`tracking_no` 필수). `pg_cron`이 매분 `expire_pending_orders()`로 10분 지난 pending을 failed 처리. 취소는 Edge Function `cancel-payment`(소유자/관리자 검증 → 토스 취소 → `cancel_order_db`). **배송비 규칙은 `create_order`와 `common.js` 두 곳에 있으므로 함께 바꾼다.**
 - 관리자 지정: 회원가입 후 SQL로 `update public.profiles set role = 'admin' where email = '...';`
@@ -53,6 +53,14 @@ powershell -ExecutionPolicy Bypass -File serve.ps1 -Port 9000
 - `sessionStorage.fr_buynow`: 상세 페이지 "구매하기"로 바로 결제할 상품. `checkout.html?mode=buynow`일 때 장바구니 대신 사용.
 - `sessionStorage.fr_pending_order`: 결제 요청 직전에 저장하는 `{orderId, orderName, amount, mode, items}`(orderId/amount는 `create_order` 결과). `success.html`이 리다이렉트 파라미터(`orderId`, `amount`)와 비교하고 DB(`mark_order_paid`)로 한 번 더 확인한 뒤, `mode === "cart"`면 장바구니를 비운다.
 - 배송비 규칙: `SHIPPING_FREE_OVER`(50,000원) 이상 무료, 미만 `SHIPPING_FEE`(3,000원). `calcOrder`에서만 계산한다.
+
+### Phase 3 (구매 경험)
+- 찜: `Wish`(db.js) + 카드의 `.wish-btn`(common.js 이벤트 위임). `products.likes`는 `wishlists` 트리거로만 변한다. 비회원은 `loginUrl()`로 이동.
+- 장바구니: 로그인 직후 `Cart.mergeOnLogin()`이 `merge_cart` RPC로 병합(합산, 상한 99)하며 `App.ready`에 이어 붙어 있어 페이지 스크립트는 병합 후 실행된다. 이후 `Cart.save`가 `set_cart`로 서버에 반영. 병합 완료 표시는 `sessionStorage.fr_cart_merged`(**raw 문자열**, storeSet 금지). 로그아웃 시 로컬 장바구니를 비운다.
+- 리뷰: `reviews` RLS가 "본인의 delivered 주문 항목"만 insert 허용, `rating/reviews`는 트리거 집계(숨김 제외). 사진은 `review-images/{user_id}/...`. 관리자 후기 탭에서 숨김/삭제.
+- 검색/필터: `search_products(q)` RPC(pg_trgm, 오타 완화). `js/list.js`가 tops/pants/shoes/search 공용이며 필터·정렬 UI를 `.toolbar` 뒤에 주입한다(HTML은 data-page만 다르게). `search.html`은 tops.html 복사본.
+- 배송지: `addresses`(최대 10, 기본 1개는 트리거). 결제 화면에서 선택/저장, 주문은 스냅샷.
+- 계정: 로그인 화면의 Google 버튼(provider 활성화 여부를 `/auth/v1/settings`로 먼저 확인), 비밀번호 재설정(`reset-password.html`), 마이페이지 비밀번호 변경·탈퇴(Edge Function `delete-account` — 진행 중 주문·관리자는 거부). Google OAuth 클라이언트와 리다이렉트 URL은 대시보드 수동 설정.
 
 ### 이미지 / 배송 / 알림
 - `productImage(p, variant)`: `p.images[variant]`(db.js가 `product_images`에서 로드)가 있으면 `<img>`(Storage 공개 URL, 변환은 Pro 플랜 기능이라 원본 사용), 없으면 SVG 폴백. 관리자 상품 폼에서 업로드/순서/삭제(Storage RLS는 관리자만).

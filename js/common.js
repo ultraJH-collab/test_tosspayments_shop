@@ -35,6 +35,22 @@ const Cart = {
   save(items) {
     storeSet(localStorage, this.KEY, items);
     updateCartBadge();
+    this.push(items);
+  },
+  // 로그인 회원은 변경을 서버 장바구니에 반영한다(연속 변경은 묶어서 한 번만).
+  push(items) {
+    if (!Auth.user || !sb || !sessionStorage.getItem("fr_cart_merged")) return;
+    clearTimeout(this._t);
+    this._t = setTimeout(() => sb.rpc("set_cart", { p_items: items }).then(({ error }) => error && console.warn("장바구니 동기화 실패", error.message)), 400);
+  },
+  // 로그인 직후 1회: 로컬 장바구니를 서버와 합치고(수량 합산, 상한 99) 결과를 로컬 캐시로 둔다.
+  async mergeOnLogin() {
+    if (!Auth.user || !sb || sessionStorage.getItem("fr_cart_merged") === Auth.user.id) return;
+    const { data, error } = await sb.rpc("merge_cart", { p_items: storeGet(localStorage, this.KEY, []) });
+    if (error) return console.warn("장바구니 병합 실패", error.message);
+    storeSet(localStorage, this.KEY, data);
+    try { sessionStorage.setItem("fr_cart_merged", Auth.user.id); } catch (e) {}
+    updateCartBadge();
   },
   add(id, size, qty) {
     const items = this.items();
@@ -110,6 +126,7 @@ function productCard(p, rank) {
           ${productImage(p)}
           ${rank ? `<span class="rank">${rank}</span>` : ""}
           ${p.tag ? `<span class="badge badge-${p.tag.toLowerCase()}">${p.tag}</span>` : ""}
+          <button type="button" class="wish-btn${Wish.has(p.id) ? " on" : ""}" data-wish="${p.id}" aria-label="찜하기">♥</button>
           ${isSoldOut(p) ? `<span class="soldout-mask">품절</span>` : ""}
         </div>
         <div class="card-info">
@@ -136,8 +153,8 @@ function renderHeader(active) {
     <div class="topbar">
       <div class="inner topbar-inner">
         <a href="index.html" class="logo">FITROOM</a>
-        <form class="search" action="tops.html" onsubmit="return false">
-          <input type="search" placeholder="브랜드, 상품, 프로필, 태그 등" aria-label="검색" />
+        <form class="search" action="search.html" method="get">
+          <input type="search" name="q" value="${escapeHtml(qs("q") || "")}" placeholder="브랜드, 상품명 검색" aria-label="검색" />
           <button type="submit" aria-label="검색">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
           </button>
@@ -146,6 +163,7 @@ function renderHeader(active) {
           ${
             Auth.user
               ? (Auth.isAdmin ? `<a href="admin.html" class="ta ta-admin">관리자</a>` : "") +
+                `<a href="mypage.html#wish" class="ta" aria-label="찜한 상품">♥ 찜</a>` +
                 `<a href="mypage.html" class="ta">${escapeHtml(Auth.displayName())}님</a>` +
                 `<button type="button" class="ta" id="btn-logout">로그아웃</button>`
               : `<a href="${loginUrl()}" class="ta">로그인</a><a href="login.html?tab=signup" class="ta">회원가입</a>`
@@ -200,9 +218,23 @@ function toast(msg) {
   t._timer = setTimeout(() => t.classList.remove("show"), 2000);
 }
 
+// 카드의 찜 버튼(이벤트 위임). 링크 이동을 막고 토글한다.
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest(".wish-btn");
+  if (!b) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const on = await Wish.toggle(b.dataset.wish);
+  if (on === null) return;
+  document.querySelectorAll(`.wish-btn[data-wish="${b.dataset.wish}"]`).forEach((x) => x.classList.toggle("on", on));
+  toast(on ? "찜 목록에 추가했어요." : "찜을 취소했어요.");
+});
+
 document.addEventListener("DOMContentLoaded", () => {
   renderHeader(document.body.dataset.page || "");
   renderFooter();
 });
+// 로그인 직후 장바구니 병합이 끝난 뒤에 페이지 스크립트가 실행되도록 ready 를 이어 붙인다.
+App.ready = App.ready.then(() => Cart.mergeOnLogin()).catch((e) => console.warn(e));
 // 세션/상품 로드 후 로그인 상태와 장바구니 수량을 반영해 다시 그린다.
 onReady(() => renderHeader(document.body.dataset.page || ""));
