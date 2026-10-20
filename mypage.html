@@ -60,6 +60,21 @@
         toast("회원 정보를 저장했어요.");
       });
 
+      $("orders").addEventListener("click", async (e) => {
+        const btn = e.target.closest("[data-cancel]");
+        if (!btn || !confirm("이 주문을 취소할까요? 결제 금액이 전액 환불됩니다.")) return;
+        btn.disabled = true;
+        const { error } = await sb.functions.invoke("cancel-payment", { body: { orderId: btn.dataset.cancel, reason: "고객 요청" } });
+        if (error) {
+          let msg = error.message;
+          try { msg = (await error.context.json()).error || msg; } catch (err) {}
+          btn.disabled = false;
+          return toast(msg);
+        }
+        toast("주문을 취소했습니다.");
+        setTimeout(() => location.reload(), 600);
+      });
+
       const { data: orders, error } = await sb
         .from("orders")
         .select("*, order_items(*)")
@@ -89,6 +104,8 @@
                 <div class="li-price"><b>${won(i.line_total)}</b></div>
               </div>`;
             }).join("")}
+            ${o.status === "canceled" ? `<div class="oc-foot muted">취소 사유: ${escapeHtml(o.cancel_reason || "-")}</div>` : ""}
+            <div class="oc-foot">${o.status === "paid" ? `<button type="button" class="btn-cancel-order" data-cancel="${escapeHtml(o.id)}">주문 취소</button>` : o.status === "shipping" || o.status === "delivered" ? '<span class="muted">배송 이후 취소는 고객센터로 문의해 주세요.</span>' : ""}</div>
             <div class="oc-foot">배송비 ${o.shipping ? won(o.shipping) : "무료"} · 결제금액 <b>${won(o.amount)}</b></div>
           </div>`).join("")
         : `<div class="empty"><p>주문 내역이 없습니다.</p><a class="btn btn-black" href="index.html">쇼핑하러 가기</a></div>`;

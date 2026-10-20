@@ -103,6 +103,7 @@ function productCard(p, rank) {
           ${productImage(p)}
           ${rank ? `<span class="rank">${rank}</span>` : ""}
           ${p.tag ? `<span class="badge badge-${p.tag.toLowerCase()}">${p.tag}</span>` : ""}
+          ${isSoldOut(p) ? `<span class="soldout-mask">품절</span>` : ""}
         </div>
         <div class="card-info">
           <p class="brand">${escapeHtml(p.brand)}</p>

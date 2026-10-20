@@ -126,7 +126,24 @@ onReady(() => {
   }
   form.addEventListener("input", renderPreview);
 
-  function openProductForm(p) {
+  // 사이즈 입력값에 맞춰 재고 입력칸을 만든다(이미 입력한 값은 유지).
+  function parseSizes() {
+    return [...new Set(form.elements.sizes.value.split(",").map((s) => s.trim()).filter(Boolean))];
+  }
+  function renderStock(values) {
+    const cur = values || stockValues();
+    $("f-stock").innerHTML = parseSizes()
+      .map((s) => `<label class="check" style="gap:4px">${escapeHtml(s)} <input type="number" min="0" data-size="${escapeHtml(s)}" value="${cur[s] ?? 0}" style="width:70px" /></label>`)
+      .join("");
+  }
+  function stockValues() {
+    const v = {};
+    $("f-stock").querySelectorAll("input").forEach((i) => (v[i.dataset.size] = Math.max(0, parseInt(i.value, 10) || 0)));
+    return v;
+  }
+  form.elements.sizes.addEventListener("input", () => renderStock());
+
+  async function openProductForm(p) {
     editing = p || null;
     const v = p || { id: "", cat: "tops", brand: "", name: "", price: "", sale: "", sizes: ["S", "M", "L", "XL"], color: "#555555", tone: "#f2f2f2", tag: "", rating: 0, reviews: 0, likes: 0, is_active: true };
     const f = form.elements;
@@ -148,6 +165,14 @@ onReady(() => {
     f.is_active.checked = v.is_active;
     $("p-error").textContent = "";
     renderPreview();
+    let cur = {};
+    if (p) {
+      const { data: rows } = await sb.from("product_stock").select("size, stock").eq("product_id", p.id);
+      (rows || []).forEach((r) => (cur[r.size] = r.stock));
+    } else {
+      v.sizes.forEach((s) => (cur[s] = 10));
+    }
+    renderStock(cur);
     dlg.showModal();
   }
   $("p-new").onclick = () => openProductForm(null);
@@ -176,6 +201,16 @@ onReady(() => {
     const { data, error } = await req;
     $("p-save").disabled = false;
     if (error) return fail(error.message);
+
+    // 재고 저장: 입력한 사이즈는 upsert, 빠진 사이즈는 삭제
+    const stock = stockValues();
+    const rows = Object.entries(stock).map(([size, qty]) => ({ product_id: data.id, size, stock: qty }));
+    const { error: stockErr } = await sb.from("product_stock").upsert(rows);
+    if (!stockErr) {
+      const keep = Object.keys(stock).map((s) => `"${s.replace(/"/g, '\\"')}"`).join(",");
+      await sb.from("product_stock").delete().eq("product_id", data.id).not("size", "in", `(${keep})`);
+    }
+    if (stockErr) toast("상품은 저장했지만 재고 저장에 실패했습니다: " + stockErr.message);
 
     const saved = { ...data, rating: Number(data.rating) };
     if (editing) Object.assign(editing, saved);
@@ -266,6 +301,17 @@ onReady(() => {
     renderOrders();
   }
 
+  // 직접 바꿀 수 있는 상태는 paid → shipping → delivered 뿐. 취소는 결제 취소(Edge Function)로만 한다.
+  const NEXT_STATUS = { paid: "shipping", shipping: "delivered" };
+  function orderStatusCell(o) {
+    const next = NEXT_STATUS[o.status];
+    return `<span class="status status-${o.status}">${ORDER_STATUS[o.status]}</span>${
+      next ? ` <button type="button" class="btn-cancel-order" data-advance="${escapeHtml(o.id)}">${ORDER_STATUS[next]}으로</button>` : ""
+    }${o.status === "paid" ? ` <button type="button" class="btn-cancel-order" data-cancel="${escapeHtml(o.id)}">결제 취소</button>` : ""}${
+      o.fail_reason ? `<br><small class="muted">${escapeHtml(o.fail_reason)}</small>` : o.cancel_reason ? `<br><small class="muted">${escapeHtml(o.cancel_reason)}</small>` : ""
+    }`;
+  }
+
   function renderOrders() {
     const q = $("o-search").value.trim().toLowerCase();
     const status = $("o-status").value;
@@ -286,25 +332,40 @@ onReady(() => {
             </details>
           </td>
           <td class="num">${won(o.amount)}</td>
-          <td><select data-order="${escapeHtml(o.id)}">${Object.entries(ORDER_STATUS).map(([k, v]) => `<option value="${k}" ${o.status === k ? "selected" : ""}>${v}</option>`).join("")}</select></td>
+          <td>${orderStatusCell(o)}</td>
         </tr>`).join("")
       : `<tr><td colspan="6" class="muted">조건에 맞는 주문이 없습니다.</td></tr>`;
   }
   ["o-search", "o-status"].forEach((id) => $(id).addEventListener("input", renderOrders));
 
-  $("o-rows").addEventListener("change", async (e) => {
-    const sel = e.target;
-    if (!sel.dataset.order) return;
-    const o = state.orders.find((x) => x.id === sel.dataset.order);
-    sel.disabled = true;
-    const { data, error } = await sb.from("orders").update({ status: sel.value }).eq("id", o.id).select().single();
-    sel.disabled = false;
-    if (error) {
-      sel.value = o.status;
-      return toast(error.message);
+  $("o-rows").addEventListener("click", async (e) => {
+    const btn = e.target.closest("button");
+    if (!btn) return;
+    const o = state.orders.find((x) => x.id === (btn.dataset.advance || btn.dataset.cancel));
+    if (!o) return;
+    btn.disabled = true;
+    if (btn.dataset.advance) {
+      const { data, error } = await sb.from("orders").update({ status: NEXT_STATUS[o.status] }).eq("id", o.id).select().single();
+      if (error) {
+        btn.disabled = false;
+        return toast(error.message);
+      }
+      Object.assign(o, data);
+      toast(`주문 상태를 '${ORDER_STATUS[o.status]}'(으)로 변경했습니다.`);
+    } else {
+      const reason = prompt("취소 사유를 입력해 주세요. 토스 결제가 전액 취소되고 재고가 복구됩니다.", "관리자 취소");
+      if (reason === null) return (btn.disabled = false);
+      const { error } = await sb.functions.invoke("cancel-payment", { body: { orderId: o.id, reason } });
+      if (error) {
+        let msg = error.message;
+        try { msg = (await error.context.json()).error || msg; } catch (err) {}
+        btn.disabled = false;
+        return toast(msg);
+      }
+      toast("결제를 취소했습니다.");
+      state.loaded.products = false; // 재고가 복구되었으므로 다음에 다시 불러온다
+      return loadOrders();
     }
-    o.status = data.status;
-    toast(`주문 상태를 '${ORDER_STATUS[o.status]}'(으)로 변경했습니다.`);
     renderOrders();
   });
 

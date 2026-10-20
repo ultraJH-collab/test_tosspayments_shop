@@ -41,17 +41,21 @@ onReady(() => {
   renderGallery();
 
   /* 사이즈 */
-  $("sizes").innerHTML = p.sizes.map((s) => `<button type="button" class="size-btn" data-size="${escapeHtml(s)}">${escapeHtml(s)}</button>`).join("");
+  $("sizes").innerHTML = p.sizes
+    .map((s) => `<button type="button" class="size-btn" data-size="${escapeHtml(s)}"${stockOf(p, s) <= 0 ? " disabled" : ""}>${escapeHtml(s)}${stockOf(p, s) <= 0 ? " (품절)" : ""}</button>`)
+    .join("");
   $("sizes").addEventListener("click", (e) => {
     const b = e.target.closest(".size-btn");
-    if (!b) return;
+    if (!b || b.disabled) return;
     state.size = b.dataset.size;
+    setQty(state.qty);
     $("sizes").querySelectorAll(".size-btn").forEach((x) => x.classList.toggle("on", x === b));
   });
 
   /* 수량 */
   function setQty(n) {
-    state.qty = Math.max(1, Math.min(99, Number(n) || 1));
+    const max = state.size ? Math.min(99, stockOf(p, state.size)) : 99;
+    state.qty = Math.max(1, Math.min(max, Number(n) || 1));
     $("qty").value = state.qty;
     $("pd-total").textContent = won(p.sale * state.qty);
   }
@@ -66,6 +70,7 @@ onReady(() => {
   };
 
   function requireSize() {
+    if (isSoldOut(p)) { toast("품절된 상품입니다."); return false; }
     if (state.size) return true;
     toast("사이즈를 선택해 주세요.");
     $("sizes").scrollIntoView({ behavior: "smooth", block: "center" });

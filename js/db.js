@@ -56,10 +56,24 @@ function loginUrl() {
 
 /* ---------- 상품 ---------- */
 async function loadProducts() {
-  const { data, error } = await sb.from("products").select("*").order("id");
+  const [{ data, error }, { data: stockRows }] = await Promise.all([
+    sb.from("products").select("*").order("id"),
+    sb.from("product_stock").select("product_id, size, stock"),
+  ]);
   if (error) throw error;
+  // 상품별 사이즈 재고 { [size]: n }. 재고를 못 읽으면 stock 은 null(제한 없음으로 취급).
+  const stock = {};
+  (stockRows || []).forEach((r) => ((stock[r.product_id] = stock[r.product_id] || {})[r.size] = r.stock));
   // 관리자는 숨김 상품도 조회되지만, 매장 화면에는 판매중 상품만 보여준다.
-  PRODUCTS.splice(0, PRODUCTS.length, ...data.filter((p) => p.is_active).map((p) => ({ ...p, rating: Number(p.rating) })));
+  PRODUCTS.splice(0, PRODUCTS.length, ...data.filter((p) => p.is_active).map((p) => ({ ...p, rating: Number(p.rating), stock: stockRows ? stock[p.id] || {} : null })));
+}
+
+// 사이즈 재고(stock이 null이면 알 수 없음 → 제한하지 않음). 실제 차감/검증은 create_order 가 한다.
+function stockOf(p, size) {
+  return p.stock ? p.stock[size] || 0 : Infinity;
+}
+function isSoldOut(p) {
+  return !!p.stock && p.sizes.every((s) => stockOf(p, s) <= 0);
 }
 
 /* ---------- 앱 초기화 ---------- */

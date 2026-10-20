@@ -38,9 +38,14 @@
       if (!paymentKey || !orderId || !pending || pending.orderId !== orderId || pending.amount !== amount) {
         return fail("주문 정보가 없거나 결제 금액이 일치하지 않습니다.");
       }
-      // 금액 위변조 확인 2: DB에 저장된 주문 금액과 비교한 뒤 결제완료로 기록
-      const { data: order, error } = await sb.rpc("mark_order_paid", { p_order_id: orderId, p_payment_key: paymentKey, p_amount: amount });
-      if (error) return fail(error.message);
+      // 금액 위변조 확인 2: 서버(Edge Function)가 DB 금액과 비교 → 토스 결제 승인 API 호출 → 결제완료로 기록
+      el.innerHTML = `<div class="result-icon">…</div><h1>결제를 승인하는 중입니다</h1><p>잠시만 기다려 주세요.</p>`;
+      const { data: order, error } = await sb.functions.invoke("confirm-payment", { body: { orderId, paymentKey, amount } });
+      if (error) {
+        let msg = error.message;
+        try { msg = (await error.context.json()).error || msg; } catch (e) {}
+        return fail(msg);
+      }
 
       if (pending.mode === "cart") Cart.save([]);
       try { sessionStorage.removeItem("fr_buynow"); } catch (e) {}
@@ -61,11 +66,7 @@
             ? `<a class="btn btn-black" href="mypage.html">주문내역 보기</a>`
             : `<a class="btn btn-black" href="login.html?tab=signup">회원가입</a>`
         }</div>
-        <p class="dev-note">
-          <b>개발 참고</b> · 토스페이먼츠는 이 페이지로 돌아온 뒤 <b>10분 안에 결제 승인 API</b>(<code>POST /v1/payments/confirm</code>)를
-          호출해야 결제가 최종 완료됩니다. 승인 API는 시크릿 키가 필요하므로 반드시 서버에서 호출하세요.
-          주문은 Supabase <code>orders</code>에 "결제완료"로 저장되지만, 서버 승인은 아직 포함되어 있지 않습니다.
-        </p>`;
+        `;
     });
   </script>
 </body>

@@ -39,9 +39,9 @@ powershell -ExecutionPolicy Bypass -File serve.ps1 -Port 9000
 ### Supabase
 - 프로젝트: `fitroom-shop` (ref `fnzrwjiiwcstilaxiish`, ap-northeast-2). `js/db.js`에는 **publishable 키만** 둔다. 권한은 전부 RLS로 강제하며, 화면 단 관리자 체크는 UX용이다.
 - 스키마 기록: `supabase/migrations/*.sql` (Supabase MCP `apply_migration`으로 적용한 것과 동일). 스키마를 바꾸면 새 번호 파일을 추가하고 같은 내용을 적용한다.
-- 테이블: `profiles`(auth.users 가입 시 트리거로 생성, `role` user/admin, `status` active/blocked), `products`, `orders`, `order_items`(주문 당시 상품 스냅샷, products FK 없음).
+- 테이블: `product_stock`(사이즈별 재고), `order_events`(주문 상태 이력), `profiles`(auth.users 가입 시 트리거로 생성, `role` user/admin, `status` active/blocked), `products`, `orders`, `order_items`(주문 당시 상품 스냅샷, products FK 없음).
 - `is_admin()`이 RLS의 기준. 일반 회원은 자기 `role`/`status`를 바꿀 수 없고(트리거 `protect_profile_fields`), 관리자는 자기 권한을 내릴 수 없다. SQL 편집기(auth.uid() 없음)에서는 자유롭게 바꿀 수 있다.
-- 주문은 클라이언트가 insert하지 않고 RPC로만 만든다: `create_order(p_items, p_customer)`가 DB 상품가로 금액·배송비·주문명을 계산해 `pending` 주문을 만들고 `{order_id, order_name, amount}`를 돌려준다 → `success.html`이 `mark_order_paid(order_id, payment_key, amount)`로 금액 일치 확인 후 `paid` 처리, 실패/취소는 `mark_order_failed`. **배송비 규칙은 `create_order`와 `common.js` 두 곳에 있으므로 함께 바꾼다.**
+- 주문은 클라이언트가 insert하지 않고 RPC로만 만든다: `create_order(p_items, p_customer)`가 DB 상품가로 금액·배송비·주문명을 계산해 `pending` 주문을 만들고 `{order_id, order_name, amount}`를 돌려준다 → `success.html`이 Edge Function `confirm-payment`를 호출(토스 승인 API → 서비스 롤로 `mark_order_paid`, 일반 사용자 호출 불가), 실패/위젯 닫힘은 `mark_order_failed(order_id, reason)`. `create_order`는 `product_stock`을 조건부 UPDATE로 차감(재고 부족 시 예외)하고, 재고 복구·`order_events` 기록·상태 전이 검증은 `orders_status_guard` 트리거가 맡는다(클라이언트 직접 변경은 관리자의 paid→shipping→delivered만 허용). `pg_cron`이 매분 `expire_pending_orders()`로 10분 지난 pending을 failed 처리. 취소는 Edge Function `cancel-payment`(소유자/관리자 검증 → 토스 취소 → `cancel_order_db`). **배송비 규칙은 `create_order`와 `common.js` 두 곳에 있으므로 함께 바꾼다.**
 - 관리자 지정: 회원가입 후 SQL로 `update public.profiles set role = 'admin' where email = '...';`
 - 이메일 인증/리다이렉트 URL은 Supabase 대시보드 Authentication 설정에서 관리한다(MCP로 변경 불가).
 
@@ -59,7 +59,7 @@ powershell -ExecutionPolicy Bypass -File serve.ps1 -Port 9000
 - `TOSS_CLIENT_KEY`는 토스 문서에 공개된 결제위젯 테스트 키(`test_gck_docs_...`). `test_`로 시작하지 않으면 결제를 막도록 되어 있다 — 테스트 환경 전용이라는 요구사항이므로 이 가드를 유지한다.
 - 흐름: `TossPayments(key).widgets({customerKey: 회원이면 Auth.user.id, 아니면 ANONYMOUS})` → `setAmount` → `renderPaymentMethods` + `renderAgreement` → 결제 버튼 클릭 시 `sb.rpc("create_order")` → `requestPayment({orderId, orderName, successUrl, failUrl, ...})`.
 - `successUrl`/`failUrl`은 현재 경로 기준으로 계산하므로 하위 경로에 배포해도 동작한다.
-- **결제 승인 API(`POST /v1/payments/confirm`)는 미구현.** 시크릿 키가 필요해 서버에서 호출해야 하며, 호출하지 않으면 결제는 10분 후 만료된다. 추가한다면 Supabase Edge Function(시크릿 키는 함수 secret)으로 만들고 `success.html`의 `mark_order_paid` 대신 호출해 승인 후 `paid`로 바꾸도록 연결한다. 지금의 `paid`는 "결제 인증 완료" 수준이다.
+- **결제 승인/취소는 Edge Function**(`supabase/functions/confirm-payment`, `cancel-payment`, verify_jwt=false — 취소는 함수 안에서 토큰 검증). 시크릿 키는 함수 secret `TOSS_SECRET_KEY`에서만 읽고, 미설정이면 토스 문서 공개 테스트 키로 폴백하며 `test_`가 아니면 거부한다. 내 상점 키를 쓰려면 secret을 설정한다. 함수는 MCP `deploy_edge_function`으로 배포하며 소스는 `supabase/functions/`에 기록한다. 웹훅(`payment-webhook`)은 아직 없다.
 
 ## MCP
 

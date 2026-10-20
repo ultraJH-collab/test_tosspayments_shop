@@ -24,7 +24,7 @@
       const pending = storeGet(sessionStorage, "fr_pending_order", null);
       // DB의 결제대기 주문을 결제실패로 남긴다.
       // (supabase-js 요청은 then을 호출해야 실제로 전송된다)
-      if (sb && qs("orderId")) sb.rpc("mark_order_failed", { p_order_id: qs("orderId") }).then(() => {});
+      if (sb && qs("orderId")) sb.rpc("mark_order_failed", { p_order_id: qs("orderId"), p_reason: [qs("code"), qs("message")].filter(Boolean).join(": ") || null }).then(() => {});
       const back = pending && pending.mode === "buynow" ? "checkout.html?mode=buynow" : "checkout.html";
       document.getElementById("result").innerHTML = `
         <div class="result-icon fail">!</div>

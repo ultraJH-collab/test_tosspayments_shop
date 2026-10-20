@@ -352,3 +352,6 @@ table.size-table { width: 100%; border-collapse: collapse; font-size: 13px; text
   .dlg-body .form-grid { grid-template-columns: 1fr; }
   .admin-toolbar .btn { margin-left: 0; }
 }
+.soldout-mask { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(255,255,255,.65); color: #000; font-weight: 800; letter-spacing: .1em; }
+.size-btn:disabled { color: #bbb; text-decoration: line-through; cursor: not-allowed; }
+.btn-cancel-order { margin-left: 12px; padding: 4px 10px; border: 1px solid #ccc; background: #fff; font-size: 12px; cursor: pointer; }
