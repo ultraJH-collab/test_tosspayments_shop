@@ -32,12 +32,6 @@
         <p class="pay-error" data-error></p>
         <button type="submit" class="btn btn-black">회원가입</button>
       </form>
-
-      <div class="auth-done hidden" id="signup-done">
-        <div class="result-icon">✓</div>
-        <h2>인증 메일을 보냈습니다</h2>
-        <p>메일함에서 인증 링크를 누른 뒤 로그인해 주세요.</p>
-      </div>
     </div>
   </main>
 
@@ -59,7 +53,6 @@
       function showTab(tab) {
         tabs.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.tab === tab));
         Object.entries(forms).forEach(([k, f]) => f.classList.toggle("hidden", k !== tab));
-        document.getElementById("signup-done").classList.add("hidden");
         document.title = `${tab === "login" ? "로그인" : "회원가입"} | FITROOM`;
       }
       tabs.addEventListener("click", (e) => e.target.dataset.tab && showTab(e.target.dataset.tab));
@@ -69,7 +62,6 @@
       const busy = (form, on) => (form.querySelector("button[type=submit]").disabled = on);
       const KO_ERRORS = {
         "Invalid login credentials": "이메일 또는 비밀번호가 올바르지 않습니다.",
-        "Email not confirmed": "이메일 인증이 완료되지 않았습니다. 메일함을 확인해 주세요.",
         "User already registered": "이미 가입된 이메일입니다.",
       };
       const ko = (err) => KO_ERRORS[err.message] || err.message;
@@ -110,23 +102,21 @@
         if (phone && !/^01\d{8,9}$/.test(phone)) return (err.textContent = "휴대폰 번호를 확인해 주세요.");
 
         busy(f, true);
-        const { data, error } = await sb.auth.signUp({
+        let { data, error } = await sb.auth.signUp({
           email,
           password: f.password.value,
-          options: {
-            data: { name, phone },
-            emailRedirectTo: location.origin + location.pathname,
-          },
+          options: { data: { name, phone } },
         });
+        // 이메일 인증은 사용하지 않는다(DB 트리거가 가입 즉시 인증 처리). 세션이 없으면 바로 로그인한다.
+        if (!error && !data.session) {
+          ({ data, error } = await sb.auth.signInWithPassword({ email, password: f.password.value }));
+          if (error) error = { message: "User already registered" };
+        }
         busy(f, false);
         if (error) return (err.textContent = ko(error));
-        if (data.session) {
-          // 이메일 인증을 끈 프로젝트에서는 바로 로그인된다.
-          toast("가입을 환영합니다!");
-          return location.replace(next);
-        }
-        f.classList.add("hidden");
-        document.getElementById("signup-done").classList.remove("hidden");
+        await loadSession();
+        toast("가입을 환영합니다!");
+        return location.replace(next);
       });
     });
   </script>
