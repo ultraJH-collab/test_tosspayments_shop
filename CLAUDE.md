@@ -18,6 +18,9 @@ powershell -ExecutionPolicy Bypass -File serve.ps1 -Port 9000
 - Claude 브라우저 미리보기는 `.claude/launch.json`의 `shop` 구성(포트 8080)으로 시작한다.
 - 빌드·린트·테스트 도구는 없다. 검증은 브라우저에서 직접 확인한다.
 - Git은 `C:\Program Files\Git\cmd\git.exe`에 설치되어 있다(winget). 셸 PATH에 없으면 전체 경로를 쓴다. 원격: `https://github.com/ultraJH-collab/test_tosspayments_shop` (`main`).
+- 배포: Vercel(팀 `imsi`, 프로젝트 `test_tosspayments_shop`). `main` 푸시 → 프로덕션 `https://testtosspaymentsshop-six.vercel.app`, 브랜치 푸시 → 미리보기 `testtosspaymentsshop-git-<branch>-imsi.vercel.app`. 배포 상태와 미리보기 URL은 Claude in Chrome(GitHub/Vercel 로그인됨)으로 확인한다.
+- `gh` CLI는 없다 → PR·체크·배포 조회는 Chrome으로 한다. `python`은 Windows Store 스텁이라 실행되지 않는다 → 스크립트는 `node`로 작성한다.
+- JS 템플릿 리터럴(백틱, `${}`)이 든 코드는 bash heredoc으로 만들지 말고 Write/Edit 도구로 쓴다(따옴표 깨짐·이스케이프 오류가 생긴다). 수정 후 `node --check js/*.js`로 문법을 확인한다.
 
 ## 아키텍처
 
@@ -34,7 +37,7 @@ powershell -ExecutionPolicy Bypass -File serve.ps1 -Port 9000
 - `tops.html` / `pants.html` / `shoes.html`: `data-page`만 다른 동일 마크업이며 모두 `js/list.js`를 사용한다. 하나를 수정하면 나머지 두 파일도 같이 맞춰야 한다.
 - `product.html?id=<상품ID>`: 단일 상세 템플릿 + `js/product.js`.
 - `cart.html` → `checkout.html` → `success.html` / `fail.html`.
-- `login.html`(로그인/회원가입 탭, `?tab=signup`, `?next=<같은 폴더 .html>`), `mypage.html`(회원정보 수정 + 주문내역), `admin.html` + `js/admin.js`(상품 / 회원 / 주문 관리 탭, `#products|#members|#orders`).
+- `login.html`(로그인/회원가입 탭, `?tab=signup`, `?next=<같은 폴더 .html>`), `mypage.html`(회원정보 수정 + 주문내역), `admin.html` + `js/admin.js`(탭 해시 `#products|#members|#orders|#reviews|#qna|#coupons|#content|#dashboard|#audit`, 새 탭은 `loaders`에 등록).
 
 ### Supabase
 - 프로젝트: `fitroom-shop` (ref `fnzrwjiiwcstilaxiish`, ap-northeast-2). `js/db.js`에는 **publishable 키만** 둔다. 권한은 전부 RLS로 강제하며, 화면 단 관리자 체크는 UX용이다.
@@ -44,6 +47,10 @@ powershell -ExecutionPolicy Bypass -File serve.ps1 -Port 9000
 - 주문은 클라이언트가 insert하지 않고 RPC로만 만든다: `create_order(p_items, p_customer)`가 DB 상품가로 금액·배송비·주문명을 계산해 `pending` 주문을 만들고 `{order_id, order_name, amount}`를 돌려준다 → `success.html`이 Edge Function `confirm-payment`를 호출(토스 승인 API → 서비스 롤로 `mark_order_paid`, 일반 사용자 호출 불가), 실패/위젯 닫힘은 `mark_order_failed(order_id, reason)`. `create_order`는 `product_stock`을 조건부 UPDATE로 차감(재고 부족 시 예외)하고, 재고 복구·`order_events` 기록·상태 전이 검증은 `orders_status_guard` 트리거가 맡는다(클라이언트 직접 변경은 관리자의 paid→shipping→delivered만 허용하며 이 검사는 security **invoker** 트리거 `orders_transition_guard`가 한다 — definer 트리거 안에서는 `current_user`가 소유자라 역할 검사가 불가능하다. 배송중 전환엔 `courier`/`tracking_no` 필수). `pg_cron`이 매분 `expire_pending_orders()`로 10분 지난 pending을 failed 처리. 취소는 Edge Function `cancel-payment`(소유자/관리자 검증 → 토스 취소 → `cancel_order_db`). **배송비·쿠폰 할인 규칙은 `create_order`와 `common.js`(`calcOrder`) 두 곳에 있으므로 함께 바꾼다.**
 - 관리자 지정: 회원가입 후 SQL로 `update public.profiles set role = 'admin' where email = '...';`
 - 이메일 인증/리다이렉트 URL은 Supabase 대시보드 Authentication 설정에서 관리한다(MCP로 변경 불가).
+- 새 함수는 기본으로 anon/authenticated에 EXECUTE가 부여된다 → 내부용 함수는 마이그레이션 끝에서 `revoke execute ... from public, anon, authenticated`.
+- RPC 인자를 바꿀 때는 기존 시그니처를 `drop function` 한 뒤 새로 만든다. 남겨 두면 PostgREST에서 오버로드가 모호하다는 오류가 난다.
+- `stable` plpgsql 함수 안에서는 임시 테이블을 만들 수 없다 → 집계는 CTE(`with ... as materialized`) 한 문장으로 쓴다.
+- RLS/RPC 검증: `execute_sql`에서 `do $$ ... perform set_config('request.jwt.claims', json_build_object('sub', <uid>, 'role','authenticated')::text, true); ... raise exception '%', <결과>; $$`. 결과는 오류 메시지로 받고 변경은 롤백된다.
 
 ### 상품 이미지
 실제 이미지 파일이 없고, `productImage(p, variant)`가 상품의 `color`/`tone`과 카테고리별 SVG path(`SHAPES`)로 그린다. 실제 사진으로 교체할 때는 이 함수만 바꾸면 카드·상세·장바구니·결제 화면에 모두 반영된다.
