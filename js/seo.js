@@ -2,10 +2,13 @@
    정적 메타(description, Open Graph, robots)는 각 HTML <head>에 있고, 여기서는 상품/카테고리 데이터가 필요한 부분과
    canonical·og:url 같은 주소 의존 값을 채운다. (js/common.js 다음에 로드) */
 const SITE_NAME = "FITROOM";
+// 프로덕션 주소(Vercel). canonical·구조화 데이터는 미리보기 배포에서도 이 주소를 가리켜 중복 색인을 막는다.
+// sitemap.xml / robots.txt / llms.txt 의 주소와 같아야 한다.
+const SITE_URL = "https://testtosspaymentsshop-six.vercel.app/";
 const SEO = {
-  // 현재 문서가 놓인 폴더의 절대 주소(하위 경로 배포 대응). 끝에 / 포함.
+  // 로컬 개발(localhost)에서는 현재 폴더 주소, 그 외에는 프로덕션 주소. 끝에 / 포함.
   base() {
-    return location.origin + location.pathname.replace(/[^/]*$/, "");
+    return /^(localhost|127.0.0.1|[::1])$/.test(location.hostname) ? location.origin + location.pathname.replace(/[^/]*$/, "") : SITE_URL;
   },
   page() {
     return location.pathname.split("/").pop() || "index.html";

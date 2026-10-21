@@ -27,4 +27,4 @@ Allow: /
 User-agent: Google-Extended
 Allow: /
 
-Sitemap: https://ultrajh-collab.github.io/test_tosspayments_shop/sitemap.xml
+Sitemap: https://testtosspaymentsshop-six.vercel.app/sitemap.xml
